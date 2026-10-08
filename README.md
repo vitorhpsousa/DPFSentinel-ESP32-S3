@@ -53,4 +53,6 @@ docs/           hardware, wiring, log format, PIDs, development, known issues
 logs/examples/  a real driving session
 ```
 
+If this saves you a DPF job, you can support the project on [Ko-fi](https://ko-fi.com/vitoi).
+
 Licence: GPL-3.0-or-later. See [NOTICE.md](NOTICE.md).

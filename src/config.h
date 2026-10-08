@@ -1,5 +1,6 @@
 #pragma once
-// Tunables for DPF Sentinel. Secrets (WiFi passwords, Telegram) live in include/secrets.h.
+// Tunables for DPF Sentinel. Secrets (WiFi passwords, Telegram) live in include/secrets.h, NOT here:
+// copy include/secrets.example.h to include/secrets.h and edit that. Do not paste passwords into this file.
 // Board selection comes from the PlatformIO env (-D BOARD_CYD35=1 or -D BOARD_FREENOVE=1).
 
 #if __has_include("secrets.h")
@@ -42,6 +43,8 @@
 
 // --- OBD adapter (BLE ELM327) ---
 // Discovery aids: enable at most ONE. 1: list BLE devices in range. 2: list GATT services of the adapter.
+// BLE_SCAN_ONLY 1 turns the logger into a BLE scanner: it logs NOTHING. Use it once to find the
+// adapter, copy its address into BLE_TARGET_ADDRESS, then set it back to 0.
 #define BLE_SCAN_ONLY 0
 #define BLE_DUMP_SERVICES 0
 // Leave empty to auto-detect (names containing OBD/ELM/VLINK/VEEPEAK/IOS-). Pin the address once known.
@@ -54,6 +57,7 @@
 
 // --- Storage ---
 // 1 = microSD (files in /obd, nothing else on the card is touched). 0 = internal flash (~30 min only).
+// Needs a FAT32 card (not exFAT). If the boot banner says storage=flash, the card was not found.
 #define USE_SD 1
 // 1 = ask the card for free space (walks the FAT, can be slow on big cards).
 #define SD_FREE_CHECK 0
@@ -75,7 +79,9 @@
 #define WIFI_AP_SSID "DPF-Sentinel"
 #define WIFI_DISABLED 0         // diagnostic: 1 = never start WiFi
 
-// --- Telegram (OFF by default; needs include/secrets.h token + chat id) ---
+// --- Telegram (OFF by default) ---
+// Set ENABLE_TELEGRAM to 1 only after TG_BOT_TOKEN and TG_CHAT_ID are filled in include/secrets.h
+// (how to get them: comments in include/secrets.example.h). The build stops if the token is malformed.
 #define ENABLE_TELEGRAM 0
 #define TG_ALERT_WIFI 1
 #define TG_ALERT_REGEN 1        // regen start/finish alerts (also drives the on-device regen beeps)
@@ -89,6 +95,10 @@
 #define TG_HOST "api.telegram.org"
 #define TG_PORT 443
 #define TG_USE_TLS 1
+
+// --- Project ---
+// Support link shown in Telegram reports. This belongs to the project, not to users: do not change it.
+#define KOFI_URL "https://ko-fi.com/vitoi"
 
 // --- Behaviour ---
 #define ROW_INTERVAL_MS 1000       // one CSV row per second (latest values held)
@@ -104,3 +114,12 @@
 #define LED_REGEN_PIN -1
 #define LED_TEMP_WARN_PIN -1
 #define DPF_TEMP_WARN_THRESHOLD_C 300.0f
+
+// Catch a mistyped Telegram token at build time (it must be "<bot id>:<secret>", containing a colon).
+// Written as a recursive constexpr function because the ESP32 toolchain compiles as C++11.
+#if ENABLE_TELEGRAM
+static constexpr bool hasColon(const char *t) { return *t == 0 ? false : (*t == ':' ? true : hasColon(t + 1)); }
+static_assert(hasColon(TG_BOT_TOKEN),
+              "TG_BOT_TOKEN must look like 12345678:AAbbCCdd... (bot id, colon, secret). See include/secrets.example.h");
+static_assert(sizeof(TG_CHAT_ID) > 1, "TG_CHAT_ID is empty. See include/secrets.example.h");
+#endif
