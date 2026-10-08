@@ -182,6 +182,14 @@ void setup() {
     Serial.setTxTimeoutMs(0);
     Serial.printf("Boot: reset reason %d (1=power-on 3=sw 4=panic 5/6/7=watchdog 9=brownout)\n", (int)esp_reset_reason());   // never stall on a full USB-CDC buffer when no computer is attached (power bank / car)
     delay(1000);
+    Serial.printf("DPF Sentinel | board=%s | storage=%s | wifi=%s | telegram=%s\n",
+#if defined(BOARD_CYD35)
+                  "cyd35",
+#else
+                  "freenove",
+#endif
+                  USE_SD ? "SD card" : "internal flash (30 min max)",
+                  strlen(WIFI_STA_SSID) ? WIFI_STA_SSID : "none configured", ENABLE_TELEGRAM ? "on" : "off");
     timeInitTz();
 #if HAS_DISPLAY
     if (boardInit()) { uiBegin(); pagesBegin(); } else Serial.println("Display init failed — continuing without a screen");
