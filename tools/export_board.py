@@ -141,6 +141,7 @@ def win(t):
     return t
 sub("docs/flashing-windows.md", win)
 sub("docs/development.md", lambda t: t if board == "cyd35" else re.sub(r"; CYD only:.*\n", ".\n", t))
+sub("src/config.h", lambda t: t.replace("#define RTC_DS3231_ENABLED 1", "#define RTC_DS3231_ENABLED 0   // set to 1 and set the two pins below once a DS3231 is wired (docs/wiring.md)") if board == "freenove" else t)
 sub("src/config.h", lambda t: t.replace("; Freenove: set e.g. 47", "").replace("(CYD: shares the touch bus 38/39)", "(shares the touch bus 38/39)") if board == "cyd35" else t.replace("-1 = board default (CYD: shares the touch bus 38/39); Freenove: set e.g. 47", "set to your SDA pin, e.g. 47"))
 sub("README.md", lambda t: t.replace("+ cyd-only board/ input/ audio/ ui/", "") if board == "freenove" else t.replace("cyd-only ", "").replace("+ board/", "board/"))
 sub("README.md", lambda t: re.sub(r"pio run\s+-t upload\s+# or:.*", "pio run -t upload                                # build and flash", t))
