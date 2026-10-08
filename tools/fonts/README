@@ -1,0 +1,12 @@
+DejaVuSans.ttf and DejaVuSans-Bold.ttf, copied from the Raspberry Pi
+(/usr/share/fonts/truetype/dejavu/), the same fonts pi/screen/soot_panel.py uses.
+
+Licence: DejaVu fonts are derived from Bitstream Vera Fonts (c) Bitstream, Inc.
+and are licensed under the Bitstream Vera Fonts Copyright licence with DejaVu
+changes in the public domain. The fonts may be used, copied, modified, merged,
+published and distributed, including embedded in software, provided the
+copyright notice and this permission notice are included in all copies, the
+fonts are not sold by themselves, and modified fonts are renamed. The full
+licence text is in /usr/share/doc/fonts-dejavu-core/copyright on the Pi and at
+https://dejavu-fonts.github.io/License.html . Keep this notice with the TTFs
+and with the generated src/ui/fonts_aa.* bitmap data derived from them.
