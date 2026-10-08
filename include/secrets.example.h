@@ -17,6 +17,7 @@
 #define WIFI_AP_PASS   "change-me-please"
 
 // ---- Telegram (optional, only used when ENABLE_TELEGRAM is 1 in config.h) -------------------
+// Full step-by-step guide in plain English: docs/telegram-setup.md
 // 1. In Telegram, message @BotFather, send /newbot, follow the steps. It replies with a TOKEN.
 //    The token is the WHOLE string: a number, a colon, then letters/digits. The colon is part of it:
 //        TG_BOT_TOKEN  "12345678:AAbbCCddEEffGGhhIIjjKKllMMnnOOppQQr"      <- fake example
