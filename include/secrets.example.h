@@ -6,9 +6,7 @@
 // ---- WiFi (optional) ----------------------------------------------------------------------
 // Networks to join for NTP time and the web page. 2.4 GHz only (ESP32 cannot use 5 GHz).
 // Example:  #define WIFI_STA_SSID "MyHomeWifi"     #define WIFI_STA_PASS "my wifi password"
-// SSID2 is a second network, tried alternately: put your PHONE'S HOTSPOT here. In the car the board joins it, gets the
-// time from the internet and can send Telegram alerts. Switch your phone's hotspot on before you drive.
-// iPhone: Settings > Personal Hotspot > turn on "Maximise Compatibility" (the board only works on 2.4 GHz).
+// SSID2 is a second network (e.g. your phone hotspot), tried alternately.
 #define WIFI_STA_SSID  ""
 #define WIFI_STA_PASS  ""
 #define WIFI_STA_SSID2 ""
