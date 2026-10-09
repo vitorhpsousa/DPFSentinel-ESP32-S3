@@ -78,7 +78,8 @@ void timeInitTz() {
 void timeStartNtp() { configTzTime(TZ_RULE, "pool.ntp.org", "time.google.com"); }
 
 void timeRtcBegin() {
-#if RTC_DS3231_ENABLED
+// Only probe when an I2C bus exists: pins chosen in config.h, or the CYD whose touch driver already started it.
+#if RTC_DS3231_ENABLED && (RTC_SDA_PIN >= 0 || HAS_DISPLAY)
 #if RTC_SDA_PIN >= 0
     Wire.begin(RTC_SDA_PIN, RTC_SCL_PIN, 100000);
 #endif

@@ -41,17 +41,17 @@ static float valAt(const float *values, size_t count, int col) {
 void healthBegin() {
     g_prefs.begin("health", false);
     if (g_prefs.getUChar("ver", 0) == NVS_LAYOUT_VERSION) {
-        size_t rn = g_prefs.getBytesLength("regHist");
+        size_t rn = g_prefs.isKey("regHist") ? g_prefs.getBytesLength("regHist") : 0;
         if (rn == sizeof(g_h.regenHistory)) g_prefs.getBytes("regHist", g_h.regenHistory, rn);
-        size_t wn = g_prefs.getBytesLength("warmHist");
+        size_t wn = g_prefs.isKey("warmHist") ? g_prefs.getBytesLength("warmHist") : 0;
         if (wn == sizeof(g_h.warmupMinutes)) g_prefs.getBytes("warmHist", g_h.warmupMinutes, wn);
         g_h.regenCount = g_prefs.getUChar("regCount", 0);
         g_h.regenHead = g_prefs.getUChar("regHead", 0);
         g_h.warmupCount = g_prefs.getUChar("warmCount", 0);
         g_h.warmupHead = g_prefs.getUChar("warmHead", 0);
         g_h.regensSinceOil = g_prefs.getUShort("sinceOil", 0);
-        g_h.oilChangeOdometerMi = g_prefs.getFloat("oilOdo", 0.0f);
-        g_h.lastWarmupMinutes = g_prefs.getFloat("lastWarm", NAN);
+        g_h.oilChangeOdometerMi = g_prefs.isKey("oilOdo") ? g_prefs.getFloat("oilOdo", 0.0f) : 0.0f;
+        g_h.lastWarmupMinutes = g_prefs.isKey("lastWarm") ? g_prefs.getFloat("lastWarm", NAN) : NAN;
     } else {
         // First boot with this layout (or an older one): start clean and stamp it.
         g_prefs.putUChar("ver", NVS_LAYOUT_VERSION);
