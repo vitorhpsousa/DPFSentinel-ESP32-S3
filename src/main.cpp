@@ -179,7 +179,9 @@ static bool connectAdapter() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.setTxTimeoutMs(0);
+#if ARDUINO_USB_CDC_ON_BOOT
+    Serial.setTxTimeoutMs(0);   // never stall on a full USB buffer when no computer is attached
+#endif
     // Native USB needs ~1 s to reconnect after a reset: wait (max 3 s) so the first lines are not lost.
     for (uint32_t t0 = millis(); !Serial && millis() - t0 < 3000;) delay(10);
     Serial.printf("Boot: reset reason %d (1=power-on 3=sw 4=panic 5/6/7=watchdog 9=brownout)\n", (int)esp_reset_reason());   // never stall on a full USB-CDC buffer when no computer is attached (power bank / car)

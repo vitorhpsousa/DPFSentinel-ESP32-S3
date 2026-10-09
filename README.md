@@ -3,7 +3,7 @@
 A small, **read-only** OBD-II logger for the diesel particulate filter (DPF) of a 2014 Hyundai ix35 1.7 CRDi.
 It reads soot level, differential pressure, exhaust temperature and regeneration state about once a second
 over a BLE ELM327 adapter and **saves everything to a microSD card**. On the screen board it also shows a
-colour-coded soot panel. Optional [Telegram alerts](docs/telegram-setup.md) are off by default.
+colour-coded soot panel. [Telegram alerts](docs/telegram-setup.md) tell you when a regeneration starts and finishes.
 
 The goal is a legal, non-invasive way to catch a clogging DPF early and keep regenerations completing —
 the opposite of DPF/EGR "delete" tuning, which is illegal for road use and harmful. Not a diagnostic tool;
