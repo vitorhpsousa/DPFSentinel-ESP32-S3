@@ -1,8 +1,9 @@
 # Telegram alerts — setup in plain English
 
 **What you get:** a message on your phone when the car starts a DPF clean-out ("regeneration"), finishes it, or is
-interrupted, plus a daily summary with your log files attached. **It is optional.** The logger works fully without it,
-and it ships switched off.
+interrupted, plus a daily summary with your log files attached. **It is optional.** The logger works fully without it.
+On the no-screen board it is switched on in the code but stays quiet until you add a token (it is your only way to
+hear about a regeneration); on the touch-screen board you switch it on yourself in step 4.
 
 **What you need:** the free Telegram app on your phone, and the logger able to reach the internet (your home WiFi or
 your phone's hotspot). Telegram cannot reach the logger while the car is out of WiFi range; alerts wait and are sent

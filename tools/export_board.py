@@ -84,9 +84,10 @@ is rewritten on every NTP/phone sync. ZS-042-style modules try to charge a non-r
 resistor/diode or use a LIR2032. Confirm GPIO 47/48 are free on your board before soldering.
 """
     usb = """## 3. Connect the board and find its port
-The board has two USB-C sockets: one marked **COM/UART** and one marked **USB**. Use the **USB** (native) socket: the
-firmware prints there. Then `pio device list` should show a `COMx` entry (Device Manager > Ports shows the same). If
-nothing appears, try the other socket, another data-capable cable, or install the CH340/CP210x driver.
+The board has two USB-C sockets. Use the one marked **COM** (or UART) for everything: flashing and reading messages.
+Then `pio device list` should show a `COMx` entry (Device Manager > Ports shows the same). If nothing appears, try
+another data-capable cable, or install the CH340/CP210x driver for the chip next to that socket. The other socket
+(marked USB) can power the board but prints nothing.
 
 """
     sd = "is missing, not FAT32, or the SD pins in `src/config.h` need checking."
@@ -117,15 +118,10 @@ that I2C bus). Address 0x68. The RTC holds UTC and is rewritten on every NTP/pho
 a non-rechargeable CR2032: remove the charge resistor/diode or use a LIR2032.
 """
     usb = """## 3. Connect the board and find its port
-Plug the board in and run `pio device list`; look for a `COMx` entry (Device Manager > Ports shows the same). The board
-uses the ESP32-S3's native USB and Windows 10/11 installs the driver itself. No port: try another data-capable cable.
-
-## 4. Back up the factory firmware (once, before the first flash)
-```powershell
-python -m pip install --user esptool
-python -m esptool --chip esp32s3 --port COM5 read_flash 0 0x1000000 cyd_factory_backup.bin
-```
-(Replace COM5 with your port.) Keep the file; restoring is `write_flash 0 cyd_factory_backup.bin`.
+The board has two USB-C sockets. Use the one marked **COM** (or UART) for everything: flashing and reading messages.
+Then `pio device list` should show a `COMx` entry (Device Manager > Ports shows the same). If nothing appears, try
+another data-capable cable, or install the CH340/CP210x driver for the chip next to that socket. The other socket
+(marked USB) can power the board but prints nothing.
 
 """
     sd = "is missing or not FAT32."
