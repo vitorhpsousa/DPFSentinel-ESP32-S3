@@ -180,6 +180,8 @@ static bool connectAdapter() {
 void setup() {
     Serial.begin(115200);
     Serial.setTxTimeoutMs(0);
+    // Native USB needs ~1 s to reconnect after a reset: wait (max 3 s) so the first lines are not lost.
+    for (uint32_t t0 = millis(); !Serial && millis() - t0 < 3000;) delay(10);
     Serial.printf("Boot: reset reason %d (1=power-on 3=sw 4=panic 5/6/7=watchdog 9=brownout)\n", (int)esp_reset_reason());   // never stall on a full USB-CDC buffer when no computer is attached (power bank / car)
     delay(1000);
     Serial.printf("DPF Sentinel | board=%s | storage=%s | wifi=%s | telegram=%s\n",
@@ -217,6 +219,7 @@ void setup() {
     colDist = colOf("dpf_dist_since_regen_mi"); colOdoRegen = colOf("dpf_odo_at_last_regen_mi");
     buildRequestTable();
 
+    Serial.println("[boot] mounting storage (SD card)...");
     if (store.begin(bootNumber)) Serial.printf("Logging to %s as session_%lu.csv (+ raw_%lu.log)\n", store.backend(),
                                                (unsigned long)bootNumber, (unsigned long)bootNumber);
     else Serial.println("Storage init failed — logging to Serial only");
@@ -229,6 +232,7 @@ void setup() {
 #endif
 
 #if WEB_ENABLED
+    Serial.println("[boot] starting WiFi + web page...");
     webUiBegin(&store, bootNumber);
     reportBegin(&store, bootNumber);
 #endif
@@ -236,6 +240,7 @@ void setup() {
 #if HAS_DISPLAY
     xTaskCreatePinnedToCore(uiTask, "ui", 12288, nullptr, 1, &uiTaskHandle, 0);
 #endif
+    Serial.println("[boot] setup finished");
     Serial.println("Connecting to BLE ELM327 adapter...");
     connectAdapter();
 }
