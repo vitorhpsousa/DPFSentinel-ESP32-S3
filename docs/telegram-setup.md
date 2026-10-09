@@ -52,8 +52,11 @@ The bot cannot find your chat until you have written to it first.
 
 ## Step 5 — Upload and test
 1. Upload the firmware as described in the flashing guide.
-2. Join the logger's WiFi network `DPF-Sentinel` with your phone, then open `http://192.168.4.1/api/testalert`.
-   A test message should arrive in Telegram within a few seconds.
+2. The board must be joined to a WiFi network that has internet: the network in `WIFI_STA_SSID` at home, or your phone's
+   hotspot (`WIFI_STA_SSID2`) in the car. The logger's own `DPF-Sentinel` hotspot has no internet, so it cannot send
+   Telegram messages and the `/api/testalert` page does not help while you are only joined to it.
+3. As soon as the board joins your network you get a Telegram message: **"Wi-Fi joined: <name>, IP …"**. If it arrives,
+   Telegram is working. (Allow up to a minute after power-up.)
 
 ## If nothing arrives
 | Check | Fix |
@@ -62,7 +65,8 @@ The bot cannot find your chat until you have written to it first.
 | Chat id is the bot's number | the chat id comes from the `"chat"` section in Step 3, not from the token |
 | You never wrote to the bot | open the bot, press Start, send "hi", then redo Step 3 |
 | No internet at the logger | the home WiFi name/password in `secrets.h` must be right and 2.4 GHz |
-| Logger is in the car, out of WiFi range | alerts are sent when it next connects |
+| In the car, nothing arrives | switch your phone hotspot on (and "Maximise Compatibility" on iPhone); the network must be in `WIFI_STA_SSID2` |
+| You only joined the `DPF-Sentinel` hotspot | that network has no internet; the board must join your home or phone network |
 
 ## Keeping it safe
 - The token lets anyone control your bot. If it ever leaks (a screenshot, a chat, a public post), open @BotFather,

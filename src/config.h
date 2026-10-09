@@ -75,7 +75,14 @@
 
 // --- WiFi + small web page (live values, log download/delete, set time) ---
 #define WEB_ENABLED 1
+// Hotspot mode (the board hosts its own "DPF-Sentinel" network) CANNOT reach the internet and, while the engine is
+// running, never tries to join another network. Telegram alerts need the board to join a real network (your phone's
+// hotspot in the car), so the no-screen board has the hotspot OFF. Screen board: ON (the screen is the display).
+#ifdef BOARD_FREENOVE
+#define WIFI_AP_ENABLED 0       // 1 = host the "DPF-Sentinel" hotspot instead (no internet, so no Telegram)
+#else
 #define WIFI_AP_ENABLED 1       // host the "DPF-Sentinel" hotspot; join it and open http://192.168.4.1
+#endif
 #define WIFI_AP_SSID "DPF-Sentinel"
 #define WIFI_DISABLED 0         // diagnostic: 1 = never start WiFi
 
