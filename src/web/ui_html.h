@@ -36,10 +36,24 @@ td{padding:9px 6px;border-bottom:1px solid var(--line)}
 td.r{text-align:right;color:var(--dim);white-space:nowrap}
 a{color:var(--teal);text-decoration:none}
 .foot{margin-top:14px;color:var(--dim);font-size:12px}
+form{display:flex;gap:8px;margin-top:10px}
+input{flex:1;min-width:0;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit}
+button{background:var(--teal);color:#06231f;border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:650}
+.msg{font-size:13px;color:var(--dim);margin-top:6px;min-height:1em}
 </style></head><body>
 <header><h1>OBD Logger</h1><span class="hright"><span id="clock" class="clock"></span><span id="pill" class="pill">connecting…</span></span></header>
 <div id="banner" class="banner"></div>
 <div id="grid" class="grid"></div>
+<h2>Next regen &amp; mileage</h2>
+<div class="grid">
+<div class="tile"><div class="lbl" id="estl">Next regen (estimate)</div><div class="val na" id="est">—</div></div>
+<div class="tile"><div class="lbl">Soot rate this cycle</div><div class="val na" id="rate">—</div></div>
+<div class="tile"><div class="lbl">Dash mileage (ECU + offset)</div><div class="val na" id="odo">—</div></div>
+<div class="tile"><div class="lbl">Offset vs ECU</div><div class="val" id="off">—</div></div>
+</div>
+<div class="tile" style="margin-top:10px"><div class="lbl">Set the mileage shown on the dash clock (engine on, adapter connected)</div>
+<form id="odof"><input id="dash" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 125850" required><button>Save</button></form>
+<div class="msg" id="odomsg"></div></div>
 <h2>Last 2 minutes</h2>
 <div class="charts">
 <div><div class="lbl">DPF pressure (hPa)</div><canvas id="c1" width="700" height="90"></canvas></div>
@@ -80,6 +94,17 @@ async function live(){
  const b=document.getElementById('banner');b.className='banner';b.textContent='';
  if(v.dpf_regen_active===1){b.className='banner regen';b.textContent=v.dpf_regen_burning===1?'DPF regeneration in progress — burning':'DPF regeneration in progress — heating up';}
  else if(v.engine_rpm!==null&&v.engine_rpm<=1100&&v.dpf_diff_pressure_hpa!==null&&v.dpf_diff_pressure_hpa>=20){b.className='banner idle';b.textContent='Idle DPF pressure at or above 20 hPa — compare against a hot-engine reading';}
+ const est=document.getElementById('est');
+ if(j.regen_est_mi===null||j.regen_est_mi===undefined){est.className='val na';est.textContent='—';}
+ else{est.className='val';est.innerHTML=j.regen_est_mi<1?'due':'~'+j.regen_est_mi+'<small>mi</small>';}
+ document.getElementById('estl').textContent='Next regen ('+(j.regen_est_live?'this cycle':'avg interval')+', at '+(+j.regen_trigger_g).toFixed(1)+' g)';
+ const rt=document.getElementById('rate');
+ if(j.soot_rate_g_mi===null||j.soot_rate_g_mi===undefined){rt.className='val na';rt.textContent='—';}
+ else{rt.className='val';rt.innerHTML=j.soot_rate_g_mi.toFixed(2)+'<small>g/mi</small>';}
+ const od=document.getElementById('odo');
+ if(v.odometer_mi===null){od.className='val na';od.textContent='—';}
+ else{od.className='val';od.innerHTML=Math.round(v.odometer_mi+j.odometer_offset_mi)+'<small>mi</small>';}
+ document.getElementById('off').innerHTML=(j.odometer_offset_mi>=0?'+':'')+j.odometer_offset_mi.toFixed(1)+'<small>mi</small>';
  push(hist.dp,v.dpf_diff_pressure_hpa);push(hist.egt,v.egt_before_dpf_c);push(hist.rpm,v.engine_rpm);
  draw('c1',hist.dp,'#2dd8c4');draw('c2',hist.egt,'#e8a548');draw('c3',hist.rpm,'#8ab4ff');
  document.getElementById('foot').textContent='session '+j.session+' · '+j.storage+' · '+(j.free_mb>=0?j.free_mb+' MB free':'')+' · up '+Math.round(j.t/1000)+'s'+(j.home?' · home '+j.home:'')+(j.time?' · clock: '+j.time:' · clock not set');
@@ -93,6 +118,10 @@ async function files(){
  t.innerHTML=j.length?j.map(f=>'<tr><td><a href="/dl?f='+encodeURIComponent(f.name)+'">'+f.name+'</a></td><td class="r">'+human(f.size)+'</td></tr>').join(''):'<tr><td>no files yet</td></tr>';
  }catch(e){}
 }
+document.getElementById('odof').addEventListener('submit',async e=>{e.preventDefault();
+ const m=document.getElementById('odomsg'),d=document.getElementById('dash').value;m.textContent='saving…';
+ try{const r=await fetch('/api/odometer?dash='+encodeURIComponent(d),{cache:'no-store'});m.textContent=await r.text();
+ if(r.ok)document.getElementById('dash').value='';}catch(err){m.textContent='no link to logger';}});
 fetch('/api/time?ms='+Date.now()).catch(()=>{});
 live();files();setInterval(live,1000);setInterval(files,5000);
 </script></body></html>)HTML";

@@ -181,6 +181,13 @@ void SessionStore::tailSession(Print &out, uint32_t boot, int rows) {
     out.println("--- END TAIL ---");
 }
 
+uint64_t SessionStore::cardBytes() const {
+#if USE_SD
+    if (fs_ == &SD_MMC) return SD_MMC.cardSize();
+#endif
+    return 0;
+}
+
 uint64_t SessionStore::freeBytes() const {
     if (fs_ == &LittleFS) return LittleFS.totalBytes() - LittleFS.usedBytes();
 #if USE_SD

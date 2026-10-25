@@ -21,6 +21,7 @@ public:
     fs::FS *fs() const { return fs_; }
     const String &dir() const { return dir_; }
     uint64_t freeBytes() const;
+    uint64_t cardBytes() const;   // raw card capacity from its CSD register: instant, no FAT walk (0 = no SD)
     // Serial maintenance: print every file (for retrieving flash logs) / erase them.
     void dumpAll(Print &out);
     // Prints the header and the last `rows` rows of session_<boot>.csv.

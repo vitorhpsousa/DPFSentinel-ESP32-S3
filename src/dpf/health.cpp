@@ -11,6 +11,14 @@ static const float SLOW_WARMUP_RATIO = 1.3f;              // metric #7: 30% over
 static const uint8_t SLOW_WARMUP_MIN_SAMPLES = 3;         // don't judge off one or two warm-ups
 static const float WARMUP_COLD_C = 40.0f, WARMUP_DONE_C = 80.0f;
 
+// Next-regen estimate. Regens on this car have started at 17.65-19.61 g; the
+// lowest is the default trigger so the estimate errs towards "sooner".
+static const float DEFAULT_TRIGGER_G = 17.65f;
+static const float MIN_TRIGGER_G = 12.0f;        // ignore starts below this (forced/odd regens)
+static const float MIN_LIVE_SPAN_MI = 5.0f;      // live g/mi is too noisy over fewer miles
+static const float MIN_LIVE_RATE = 0.02f;        // g/mi; below this the ratio is meaningless
+static const float MAX_ESTIMATE_MI = 999.0f;
+
 // Bumped whenever HealthState's on-disk layout changes, so a stale blob from
 // an older build is discarded instead of read as garbage.
 static const uint8_t NVS_LAYOUT_VERSION = 1;
@@ -25,13 +33,14 @@ static int colOf(const char *name) {
         if (strcmp(columnName(i), name) == 0) return (int)i;
     return -1;
 }
-static int s_colOdo = -2, s_colDist = -2, s_colCoolant = -2, s_colBatt = -2;
+static int s_colOdo = -2, s_colDist = -2, s_colCoolant = -2, s_colBatt = -2, s_colSoot = -2;
 static void resolveColumns() {
     if (s_colOdo != -2) return;
     s_colOdo = colOf("odometer_mi");
     s_colDist = colOf("dpf_dist_since_regen_mi");
     s_colCoolant = colOf("coolant_temp");
     s_colBatt = colOf("control_module_v");
+    s_colSoot = colOf("dpf_soot_level_g");
 }
 static float valAt(const float *values, size_t count, int col) {
     return (col >= 0 && (size_t)col < count) ? values[col] : NAN;
@@ -52,6 +61,9 @@ void healthBegin() {
         g_h.regensSinceOil = g_prefs.getUShort("sinceOil", 0);
         g_h.oilChangeOdometerMi = g_prefs.isKey("oilOdo") ? g_prefs.getFloat("oilOdo", 0.0f) : 0.0f;
         g_h.lastWarmupMinutes = g_prefs.isKey("lastWarm") ? g_prefs.getFloat("lastWarm", NAN) : NAN;
+        g_h.baseSootG = g_prefs.getFloat("baseSoot", 0.0f);
+        g_h.baseDistMi = g_prefs.getFloat("baseDist", 0.0f);
+        g_h.triggerSootG = g_prefs.isKey("trigG") ? g_prefs.getFloat("trigG", NAN) : NAN;
     } else {
         // First boot with this layout (or an older one): start clean and stamp it.
         g_prefs.putUChar("ver", NVS_LAYOUT_VERSION);
@@ -68,6 +80,9 @@ static void healthSave() {
     g_prefs.putUShort("sinceOil", g_h.regensSinceOil);
     g_prefs.putFloat("oilOdo", g_h.oilChangeOdometerMi);
     g_prefs.putFloat("lastWarm", g_h.lastWarmupMinutes);
+    g_prefs.putFloat("baseSoot", g_h.baseSootG);
+    g_prefs.putFloat("baseDist", g_h.baseDistMi);
+    if (!isnan(g_h.triggerSootG)) g_prefs.putFloat("trigG", g_h.triggerSootG);
     g_dirty = false;
 }
 
@@ -102,6 +117,32 @@ float healthAvgRegenIntervalMi() {
         if (!isnan(mi)) { sum += mi; n++; }
     }
     return n ? sum / n : NAN;
+}
+
+float healthRegenTriggerG() { return isnan(g_h.triggerSootG) ? DEFAULT_TRIGGER_G : g_h.triggerSootG; }
+
+// Two estimates, the live one wins once it's trustworthy:
+//  1. this cycle's rate: (soot now - soot after the last regen) / miles since then,
+//     then (trigger - soot now) / rate. Follows how the car is being driven today.
+//  2. fallback: the historical average regen interval minus miles since the last regen.
+static void updateEstimate(float soot, float dist) {
+    g_h.estMilesToRegen = NAN;
+    g_h.estFromLiveRate = false;
+    g_h.estRateGPerMi = NAN;
+    if (isnan(dist)) return;
+    const float trig = healthRegenTriggerG();
+    float span = dist - g_h.baseDistMi;
+    if (!isnan(soot) && span >= MIN_LIVE_SPAN_MI) {
+        float rate = (soot - g_h.baseSootG) / span;
+        if (rate >= MIN_LIVE_RATE) {
+            g_h.estRateGPerMi = rate;
+            g_h.estFromLiveRate = true;
+            g_h.estMilesToRegen = fminf(MAX_ESTIMATE_MI, fmaxf(0.0f, (trig - soot) / rate));
+            return;
+        }
+    }
+    float avg = healthAvgRegenIntervalMi();
+    if (!isnan(avg)) g_h.estMilesToRegen = fminf(MAX_ESTIMATE_MI, fmaxf(0.0f, avg - dist));
 }
 
 int healthRegensToday() {
@@ -164,6 +205,7 @@ bool healthSlowWarmupAlert() { if (s_slowWarmupPending) { s_slowWarmupPending = 
 
 // ---- per-row update ----
 static bool s_warming = false;
+static float s_lastDist = NAN;   // previous row's dpf_dist_since_regen_mi
 static uint32_t s_warmStartMs = 0;
 
 void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
@@ -173,7 +215,23 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
     float batt = valAt(values, count, s_colBatt);
     if (!isnan(batt)) g_h.lastBatteryV = batt;   // live only, never persisted on its own
 
+    float soot = valAt(values, count, s_colSoot);
+    float dist = valAt(values, count, s_colDist);
+    // dist_since_regen dropping means a regen completed: take this row as the new cycle's
+    // starting point. A reset while the board was off leaves the previous cycle's baseline,
+    // which is also near 0 g / 0 mi, so the estimate is still close.
+    if (!isnan(dist)) {
+        if ((!isnan(s_lastDist) && dist + 0.5f < s_lastDist) || dist + 0.5f < g_h.baseDistMi) {
+            g_h.baseDistMi = dist;
+            g_h.baseSootG = isnan(soot) ? 0.0f : soot;
+            changed = true;
+        }
+        s_lastDist = dist;
+    }
+
     if (lastEvent.type == RegenEvent::START) {
+        if (!isnan(soot) && soot >= MIN_TRIGGER_G && (isnan(g_h.triggerSootG) || soot < g_h.triggerSootG))
+            g_h.triggerSootG = soot;
         HealthState::RegenRecord &r = g_h.regenHistory[g_h.regenHead];
         r.odometerMi = valAt(values, count, s_colOdo);
         r.milesSincePrev = valAt(values, count, s_colDist);
@@ -208,6 +266,7 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
         }
     }
 
+    updateEstimate(soot, dist);
     evalOilReminder();   // level check, cheap, re-evaluated every row (no flash write on its own)
 
     if (changed) healthSave();

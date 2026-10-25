@@ -147,7 +147,12 @@ static void drawHealth(const UiState &ui, const PagesData &d) {
     y += 34;
     fmtf(b, sizeof b, ui.sinceRegen, 1, " mi"); rowAt(L0, L1, y, "Since last", b); y += 34;
     fmtf(b, sizeof b, d.healthAvgRegenIntervalMi, 0, " mi avg"); rowAt(L0, L1, y, "Avg interval", b); y += 34;
-    snprintf(b, sizeof b, "%u", d.healthRegensSinceOil); rowAt(L0, L1, y, "Since oil", b);
+    snprintf(b, sizeof b, "%u", d.healthRegensSinceOil); rowAt(L0, L1, y, "Since oil", b); y += 34;
+    if (isnan(ui.nextRegenMi)) rowAt(L0, L1, y, "Next regen", "-");
+    else if (ui.nextRegenMi < 1.0f) rowAt(L0, L1, y, "Next regen", "due", C_AMB());
+    else { snprintf(b, sizeof b, "~%.0f mi", ui.nextRegenMi); rowAt(L0, L1, y, "Next regen", b); }
+    y += 34;
+    rowAt(L0, L1, y, "Estimate", isnan(ui.nextRegenMi) ? "-" : ui.nextRegenLive ? "this cycle" : "avg interval");
 
     s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM());
     y = 50;
@@ -157,7 +162,9 @@ static void drawHealth(const UiState &ui, const PagesData &d) {
     fmtf(b, sizeof b, d.healthLastWarmupMin, 1, " min"); rowAt(R0, R1, y, "Warm-up", b); y += 34;
     fmtf(b, sizeof b, d.healthWarmupMedianMin, 1, " min"); rowAt(R0, R1, y, "Median", b); y += 34;
     fmtf(b, sizeof b, d.batteryV, 2, " V");
-    rowAt(R0, R1, y, "Voltage", b, (!isnan(d.batteryV) && d.batteryV < 12.2f) ? C_AMB() : C_FG);
+    rowAt(R0, R1, y, "Voltage", b, (!isnan(d.batteryV) && d.batteryV < 12.2f) ? C_AMB() : C_FG); y += 34;
+    fmtf(b, sizeof b, d.healthSootRateGPerMi, 2, " g/mi"); rowAt(R0, R1, y, "Soot rate", b); y += 34;
+    fmtf(b, sizeof b, d.healthRegenTriggerG, 1, " g"); rowAt(R0, R1, y, "Regen at", b);
 }
 
 static void drawSystem(const PagesData &d) {
@@ -171,7 +178,10 @@ static void drawSystem(const PagesData &d) {
     s_cv->drawFastHLine(M, y - 6, W - 2 * M, C_DIM());
     const int y0 = y, step = 38;
     rowAt(L0, L1, y, "BLE", d.bleLinked ? "linked" : "no link", d.bleLinked ? C_GRN() : C_RED()); y += step;
-    snprintf(b, sizeof b, "%s %luMB", d.sdBackend[0] ? d.sdBackend : "none", (unsigned long)d.sdFreeMB);
+    // Free space needs a FAT walk and is off by default (SD_FREE_CHECK), so show the card size then.
+    if (d.sdFreeMB > 0) snprintf(b, sizeof b, "%s %luMB free", d.sdBackend[0] ? d.sdBackend : "none", (unsigned long)d.sdFreeMB);
+    else if (d.sdCardMB > 0) snprintf(b, sizeof b, "%s %.1fGB card", d.sdBackend, d.sdCardMB / 1024.0f);
+    else snprintf(b, sizeof b, "%s", d.sdBackend[0] ? d.sdBackend : "none");
     rowAt(L0, L1, y, "Storage", b); y += step;
     snprintf(b, sizeof b, "#%lu", (unsigned long)d.bootNumber); rowAt(L0, L1, y, "Session", b); y += step;
     rowAt(L0, L1, y, "Clock", d.clockText[0] ? d.clockText : "-", d.clockSynced ? C_FG : C_AMB());
