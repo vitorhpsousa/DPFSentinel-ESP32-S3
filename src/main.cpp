@@ -132,11 +132,15 @@ static void runRequest(Req &r) {
 #if SERIAL_RAW_ECHO
         Serial.printf("RAW %s %s%s -> %s\n", r.header, r.request, frames, raw.c_str());
 #endif
-        size_t n = isotpExtract(raw.c_str(), r.rxId, r.payload, sizeof(r.payload));
+        // Decode into a scratch buffer: a rejected or half-received reply must not overwrite the
+        // last good payload, which assembleRow keeps decoding for a few seconds.
+        uint8_t buf[sizeof(r.payload)];
+        size_t n = isotpExtract(raw.c_str(), r.rxId, buf, sizeof(buf));
         // The payload must begin with the expected service/PID bytes.
         const PidDef *first = nullptr;
         for (size_t i = 0; i < PID_TABLE_LEN; i++) if (&reqs[reqOf[i]] == &r) { first = &PID_TABLE[i]; break; }
-        if (n > 0 && first && n >= first->prefixLen && !memcmp(r.payload, first->prefix, first->prefixLen)) {
+        if (n > 0 && first && n >= first->prefixLen && !memcmp(buf, first->prefix, first->prefixLen)) {
+            memcpy(r.payload, buf, n);
             r.len = n;
             r.lastGood = now;
             r.fails = 0;
@@ -473,7 +477,7 @@ void loop() {
     // slow ones (coolant, EGR, EPS) simply come round less often.
     Req *best = nullptr;
     for (size_t r = 0; r < reqCount; r++) {
-        if (now >= reqs[r].nextDue && (!best || reqs[r].nextDue < best->nextDue)) best = &reqs[r];
+        if ((int32_t)(now - reqs[r].nextDue) >= 0 && (!best || (int32_t)(reqs[r].nextDue - best->nextDue) < 0)) best = &reqs[r];
     }
     if (best) runRequest(*best);
 

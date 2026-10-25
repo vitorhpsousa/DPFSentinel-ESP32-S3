@@ -152,7 +152,7 @@ static void drawHealth(const UiState &ui, const PagesData &d) {
     else if (ui.nextRegenMi < 1.0f) rowAt(L0, L1, y, "Next regen", "due", C_AMB());
     else { snprintf(b, sizeof b, "~%.0f mi", ui.nextRegenMi); rowAt(L0, L1, y, "Next regen", b); }
     y += 34;
-    rowAt(L0, L1, y, "Estimate", isnan(ui.nextRegenMi) ? "-" : ui.nextRegenLive ? "this cycle" : "avg interval");
+    rowAt(L0, L1, y, "Estimate", isnan(ui.nextRegenMi) ? "-" : ui.nextRegenLive ? "soot rate" : "avg interval");
 
     s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM());
     y = 50;

@@ -151,7 +151,13 @@ void boardPresent() {
     // Rotate the UI_W x UI_H canvas into the LCD_W x LCD_H tx buffer (byte-swapped), in blocks of
     // 16 source pixels so the 16 destination rows being written stay in cache.
     const int B = 16;
-#if BOARD_ROTATION == 3
+#if BOARD_ROTATION == 0
+    // portrait: canvas and panel share an orientation
+    for (size_t i = 0, n = (size_t)LCD_W * LCD_H; i < n; i++) s_txbuf[i] = __builtin_bswap16(src[i]);
+#elif BOARD_ROTATION == 2
+    // portrait upside down: canvas (cx,cy) -> panel (LCD_W-1-cx, LCD_H-1-cy)
+    for (size_t i = 0, n = (size_t)LCD_W * LCD_H; i < n; i++) s_txbuf[n - 1 - i] = __builtin_bswap16(src[i]);
+#elif BOARD_ROTATION == 3
     // canvas (cx,cy) -> panel (cy, LCD_H-1-cx)
     for (int cx0 = 0; cx0 < UI_W; cx0 += B)
         for (int cy = 0; cy < UI_H; cy++) {
@@ -223,8 +229,12 @@ bool boardTouchRead(int16_t &x, int16_t &y, bool &pressed) {
         y = ((p[2] & 0x3F) << 8) | p[3];
         if (x < LCD_W && y < LCD_H) {
             pressed = true;
-            int16_t px = x, py = y;   // raw panel coords -> landscape canvas coords
-#if BOARD_ROTATION == 3
+            int16_t px = x, py = y;   // raw panel coords -> canvas coords
+#if BOARD_ROTATION == 0
+            (void)px; (void)py;
+#elif BOARD_ROTATION == 2
+            x = LCD_W - 1 - px; y = LCD_H - 1 - py;
+#elif BOARD_ROTATION == 3
             x = LCD_H - 1 - py; y = px;
 #else
             x = py; y = LCD_W - 1 - px;

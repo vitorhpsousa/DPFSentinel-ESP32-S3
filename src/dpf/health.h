@@ -40,16 +40,20 @@ struct HealthState {
     float lastBatteryV = NAN;   // live reading, not persisted
 
     // Next-regen estimate. The baseline is the soot/distance seen right after the
-    // last regen reset dpf_dist_since_regen_mi; triggerSootG is the lowest soot
-    // level a regen has been seen to start at (tightens as regens are logged).
-    // All three are persisted under their own keys.
-    float baseSootG = 0, baseDistMi = 0;
-    float triggerSootG = NAN;   // NAN = none seen yet, the built-in default is used
+    // last regen reset dpf_dist_since_regen_mi (or after an aborted regen); the
+    // trigger is the median soot level of the last few regen starts. Persisted
+    // under their own keys.
+    float baseSootG = 0, baseDistMi = 0;   // baseSootG NAN = waiting for the first soot reading
+    static const uint8_t MAX_TRIGGERS = 5;
+    float triggerHist[MAX_TRIGGERS] = {0};
+    uint8_t triggerCount = 0, triggerHead = 0;
+    bool cycleHadStart = false;   // a regen already started this cycle (later starts are retries)
+    float lastRateGPerMi = NAN;   // soot rate of the previous cycle (or before an abort)
 
     // Recomputed every row, not persisted.
     float estMilesToRegen = NAN;   // NAN = no estimate yet
-    bool estFromLiveRate = false;  // true = this cycle's g/mi, false = historical average interval
-    float estRateGPerMi = NAN;     // this cycle's soot rate (NAN until enough distance)
+    bool estFromLiveRate = false;  // true = from a soot rate, false = historical average interval
+    float estRateGPerMi = NAN;     // soot rate used: this cycle's, or the previous cycle's until enough miles
 };
 
 void healthBegin();   // load from Preferences; call once at boot

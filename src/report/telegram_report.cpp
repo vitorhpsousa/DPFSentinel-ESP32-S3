@@ -69,13 +69,18 @@ static bool sendMessage(const String &text) {
 }
 
 static bool sendFile(const String &path, const String &name, const String &caption) {
-    fs::FS *fs = gStore->fs();
-    File f = fs->open(path, FILE_READ);
+    File f;
+    size_t size = 0;
+    {
+        StoreLock lock;   // per open/read/close only, never across the network send
+        f = gStore->fs()->open(path, FILE_READ);
+        if (f) size = f.size();   // snapshot: the live session may still be growing
+    }
     if (!f) return false;
-    size_t size = f.size();   // snapshot: the live session may still be growing
+    auto closeFile = [&]() { StoreLock lock; f.close(); };
 
     WiFiClientSecure tls; WiFiClient plain; Client *c = nullptr;
-    if (!openConn(tls, plain, c)) { f.close(); return false; }
+    if (!openConn(tls, plain, c)) { closeFile(); return false; }
 
     const String B = "----obdlogger7e3f9a";
     String head = "--" + B + "\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + TG_CHAT_ID +
@@ -90,13 +95,17 @@ static bool sendFile(const String &path, const String &name, const String &capti
     uint8_t buf[1024];
     size_t sent = 0;
     while (sent < size) {
-        size_t n = f.read(buf, min(sizeof(buf), size - sent));
+        size_t n;
+        {
+            StoreLock lock;
+            n = f.read(buf, min(sizeof(buf), size - sent));
+        }
         if (n == 0) break;
-        if (c->write(buf, n) != n) { f.close(); c->stop(); return false; }
+        if (c->write(buf, n) != n) { closeFile(); c->stop(); return false; }
         sent += n;
         vTaskDelay(1);
     }
-    f.close();
+    closeFile();
     if (sent != size) { c->stop(); return false; }
     c->print(tail);
     String body;
@@ -129,6 +138,8 @@ static bool runReport(bool force, uint32_t today) {
 
     struct F { String name; int n; size_t size; };
     std::vector<F> files;
+    {
+    StoreLock lock;
     fs::FS *fs = gStore->fs();
     if (!fs) { gLastResult = "no storage"; return false; }
     File root = fs->open(gStore->dir().length() ? gStore->dir() : String("/"));
@@ -141,6 +152,7 @@ static bool runReport(bool force, uint32_t today) {
         if (isRaw && !TG_SEND_RAW) continue;
         if (f.size() < TG_MIN_BYTES && !force) continue;   // skip blank/no-adapter sessions (an on-demand send includes everything)
         files.push_back({nm, n, f.size()});
+    }
     }
     std::sort(files.begin(), files.end(), [](const F &a, const F &b) { return a.n != b.n ? a.n < b.n : a.name < b.name; });
 
@@ -338,7 +350,7 @@ static void reportTask(void *) {
         }
 #endif
         if (++pass % 4 != 0 && !gForce) continue;        // daily check every ~20 s
-        if (millis() < gRetryAfter) continue;
+        if (gRetryAfter && (int32_t)(millis() - gRetryAfter) < 0) continue;
         time_t now = time(nullptr);
         struct tm t; localtime_r(&now, &t);
         uint32_t today = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
