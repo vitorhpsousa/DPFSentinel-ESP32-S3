@@ -6,6 +6,8 @@
 #include "aatext.h"
 
 static const int W = UI_W, H = UI_H, M = 10;
+// Portrait stacks the two-column pages into one column (rows full width, a rule between groups).
+static const bool PORTRAIT = UI_W < UI_H;
 static const float GREEN_MAX = 14.0f, AMBER_MAX = 17.0f, DARK_AT = 28.0f;
 
 static GFXcanvas16 *s_cv = nullptr;
@@ -71,8 +73,9 @@ static void drawTrend(const PagesData &d) {
     fmtf(b, sizeof b, cur, 1, "g");
     rightB(b, W - M, M + 26, fit(b, 110, F_BIG), sootColor(cur));
     snprintf(b, sizeof b, "%u min/sample", d.sootHistoryStepMin);
-    putB(b, 200, M + 20, aaR14, C_LBL());
-    const int px0 = 40, px1 = W - M - 2, py0 = 48, py1 = H - 46;
+    if (PORTRAIT) putB(b, M, M + 50, aaR14, C_LBL());
+    else putB(b, 200, M + 20, aaR14, C_LBL());
+    const int px0 = 40, px1 = W - M - 2, py0 = PORTRAIT ? 70 : 48, py1 = H - 46;
     float ymax = 20.0f;
     while (ymax < mx + 1 && ymax < 60) ymax += 5;
     auto Y = [&](float v) { return py1 - (int)((py1 - py0) * fminf(fmaxf(v, 0), ymax) / ymax + 0.5f); };
@@ -111,7 +114,7 @@ static void drawTrend(const PagesData &d) {
 static void drawTrip(const PagesData &d) {
     title("TODAY");
     char b[32];
-    const int L0 = M, L1 = W / 2 - 8, R0 = W / 2 + 8, R1 = W - M;
+    int L0 = M, L1 = PORTRAIT ? W - M : W / 2 - 8, R0 = W / 2 + 8, R1 = W - M;
     int y = 50;
     fmtf(b, sizeof b, d.tripMiles, 1, " mi");
     centerB(b, (L0 + L1) / 2, y + 40, fit(b, L1 - L0, F_HERO), C_FG);
@@ -119,17 +122,18 @@ static void drawTrip(const PagesData &d) {
     fmtf(b, sizeof b, d.tripSootStart, 1, "g"); rowAt(L0, L1, y, "Soot start", b); y += 34;
     fmtf(b, sizeof b, d.tripSootPeak, 1, "g"); rowAt(L0, L1, y, "Soot peak", b, sootColor(d.tripSootPeak)); y += 34;
     fmtf(b, sizeof b, d.maxSpeed, 0, " km/h"); rowAt(L0, L1, y, "Max speed", b);
-    s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM());
-    y = 56;
-    snprintf(b, sizeof b, "%u", d.regenCount); rowAt(R0, R1, y, "Regens", b); y += 40;
+    int step = 40;
+    if (PORTRAIT) { y += 44; s_cv->drawFastHLine(M, y - 8, W - 2 * M, C_DIM()); R0 = L0; step = 34; }
+    else { s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM()); y = 56; }
+    snprintf(b, sizeof b, "%u", d.regenCount); rowAt(R0, R1, y, "Regens", b); y += step;
     if (d.lastRegenEndMs == 0) {
         rowAt(R0, R1, y, "Last regen", "none");
     } else {
         uint32_t ago = (millis() - d.lastRegenEndMs) / 1000;
         if (ago < 3600) snprintf(b, sizeof b, "%lum ago", (unsigned long)(ago / 60));
         else snprintf(b, sizeof b, "%luh%02lum ago", (unsigned long)(ago / 3600), (unsigned long)(ago % 3600 / 60));
-        rowAt(R0, R1, y, "Last", b); y += 40;
-        snprintf(b, sizeof b, "%u min", d.lastRegenMinutes); rowAt(R0, R1, y, "Duration", b); y += 40;
+        rowAt(R0, R1, y, "Last", b); y += step;
+        snprintf(b, sizeof b, "%u min", d.lastRegenMinutes); rowAt(R0, R1, y, "Duration", b); y += step;
         fmtf(b, sizeof b, d.lastRegenPeakEgt, 0, "\xC2\xB0" "C"); rowAt(R0, R1, y, "Peak EGT", b);
     }
 }
@@ -137,46 +141,47 @@ static void drawTrip(const PagesData &d) {
 static void drawHealth(const UiState &ui, const PagesData &d) {
     title("HEALTH");
     char b[40];
-    const int L0 = M, L1 = W / 2 - 8, R0 = W / 2 + 8, R1 = W - M;
+    int L0 = M, L1 = PORTRAIT ? W - M : W / 2 - 8, R0 = W / 2 + 8, R1 = W - M;
+    const int S = PORTRAIT ? 30 : 34;   // 13 rows have to fit the portrait column
     int y = 50;
     if (d.healthRegensToday < 0) rowAt(L0, L1, y, "Regens today", "-");
     else { snprintf(b, sizeof b, "%d", d.healthRegensToday); rowAt(L0, L1, y, "Regens today", b); }
-    y += 34;
+    y += S;
     if (d.healthRegensThisWeek < 0) rowAt(L0, L1, y, "This week", "-");
     else { snprintf(b, sizeof b, "%d", d.healthRegensThisWeek); rowAt(L0, L1, y, "This week", b); }
-    y += 34;
-    fmtf(b, sizeof b, ui.sinceRegen, 1, " mi"); rowAt(L0, L1, y, "Since last", b); y += 34;
-    fmtf(b, sizeof b, d.healthAvgRegenIntervalMi, 0, " mi avg"); rowAt(L0, L1, y, "Avg interval", b); y += 34;
-    snprintf(b, sizeof b, "%u", d.healthRegensSinceOil); rowAt(L0, L1, y, "Since oil", b); y += 34;
+    y += S;
+    fmtf(b, sizeof b, ui.sinceRegen, 1, " mi"); rowAt(L0, L1, y, "Since last", b); y += S;
+    fmtf(b, sizeof b, d.healthAvgRegenIntervalMi, 0, " mi avg"); rowAt(L0, L1, y, "Avg interval", b); y += S;
+    snprintf(b, sizeof b, "%u", d.healthRegensSinceOil); rowAt(L0, L1, y, "Since oil", b); y += S;
     if (isnan(ui.nextRegenMi)) rowAt(L0, L1, y, "Next regen", "-");
     else if (ui.nextRegenMi < 1.0f) rowAt(L0, L1, y, "Next regen", "due", C_AMB());
     else { snprintf(b, sizeof b, "~%.0f mi", ui.nextRegenMi); rowAt(L0, L1, y, "Next regen", b); }
-    y += 34;
+    y += S;
     rowAt(L0, L1, y, "Estimate", isnan(ui.nextRegenMi) ? "-" : ui.nextRegenLive ? "soot rate" : "avg interval");
 
-    s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM());
-    y = 50;
+    if (PORTRAIT) { y += S + 8; s_cv->drawFastHLine(M, y - 6, W - 2 * M, C_DIM()); R0 = L0; }
+    else { s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM()); y = 50; }
     if (d.healthOilChangeOdometerMi <= 0.0f) rowAt(R0, R1, y, "Oil set at", "not set");
     else { fmtf(b, sizeof b, d.healthOilChangeOdometerMi, 0, " mi"); rowAt(R0, R1, y, "Oil set at", b); }
-    y += 34;
-    fmtf(b, sizeof b, d.healthLastWarmupMin, 1, " min"); rowAt(R0, R1, y, "Warm-up", b); y += 34;
-    fmtf(b, sizeof b, d.healthWarmupMedianMin, 1, " min"); rowAt(R0, R1, y, "Median", b); y += 34;
+    y += S;
+    fmtf(b, sizeof b, d.healthLastWarmupMin, 1, " min"); rowAt(R0, R1, y, "Warm-up", b); y += S;
+    fmtf(b, sizeof b, d.healthWarmupMedianMin, 1, " min"); rowAt(R0, R1, y, "Median", b); y += S;
     fmtf(b, sizeof b, d.batteryV, 2, " V");
-    rowAt(R0, R1, y, "Voltage", b, (!isnan(d.batteryV) && d.batteryV < 12.2f) ? C_AMB() : C_FG); y += 34;
-    fmtf(b, sizeof b, d.healthSootRateGPerMi, 2, " g/mi"); rowAt(R0, R1, y, "Soot rate", b); y += 34;
+    rowAt(R0, R1, y, "Voltage", b, (!isnan(d.batteryV) && d.batteryV < 12.2f) ? C_AMB() : C_FG); y += S;
+    fmtf(b, sizeof b, d.healthSootRateGPerMi, 2, " g/mi"); rowAt(R0, R1, y, "Soot rate", b); y += S;
     fmtf(b, sizeof b, d.healthRegenTriggerG, 1, " g"); rowAt(R0, R1, y, "Regen at", b);
 }
 
 static void drawSystem(const PagesData &d) {
     title("SYSTEM");
     char b[40];
-    const int L0 = M, L1 = W / 2 - 8, R0 = W / 2 + 8, R1 = W - M;
+    int L0 = M, L1 = PORTRAIT ? W - M : W / 2 - 8, R0 = W / 2 + 8, R1 = W - M;
     int y = 50;
     bool wc = WiFi.status() == WL_CONNECTED;
     row(y, "WiFi", wc ? WiFi.SSID().c_str() : "offline"); y += 32;
     row(y, "IP", wc ? WiFi.localIP().toString().c_str() : "-"); y += 40;
     s_cv->drawFastHLine(M, y - 6, W - 2 * M, C_DIM());
-    const int y0 = y, step = 38;
+    const int y0 = y, step = PORTRAIT ? 34 : 38;
     rowAt(L0, L1, y, "BLE", d.bleLinked ? "linked" : "no link", d.bleLinked ? C_GRN() : C_RED()); y += step;
     // Free space needs a FAT walk and is off by default (SD_FREE_CHECK), so show the card size then.
     if (d.sdFreeMB > 0) snprintf(b, sizeof b, "%s %luMB free", d.sdBackend[0] ? d.sdBackend : "none", (unsigned long)d.sdFreeMB);
@@ -185,7 +190,7 @@ static void drawSystem(const PagesData &d) {
     rowAt(L0, L1, y, "Storage", b); y += step;
     snprintf(b, sizeof b, "#%lu", (unsigned long)d.bootNumber); rowAt(L0, L1, y, "Session", b); y += step;
     rowAt(L0, L1, y, "Clock", d.clockText[0] ? d.clockText : "-", d.clockSynced ? C_FG : C_AMB());
-    y = y0;
+    if (PORTRAIT) { y += step; R0 = L0; } else y = y0;
     rowAt(R0, R1, y, "Time sync", d.clockSynced ? "synced" : "NOT synced", d.clockSynced ? C_GRN() : C_AMB()); y += step;
     fmtDur(b, sizeof b, d.uptimeS); rowAt(R0, R1, y, "Uptime", b); y += step;
     snprintf(b, sizeof b, "%lu KB", (unsigned long)d.freeHeapKB); rowAt(R0, R1, y, "Heap", b); y += step;
