@@ -7,13 +7,20 @@
 
 #define LCD_W 320            // physical panel (portrait) size
 #define LCD_H 480
-// The UI canvas is LANDSCAPE. boardPresent() rotates it into the panel buffer, boardTouchRead()
-// maps raw panel touches back into canvas coordinates. 1 = 90 deg clockwise, 3 = counter-clockwise.
+// BOARD_ROTATION: 0 = portrait (short edge at the top), 2 = portrait upside down,
+// 1 = landscape 90 deg clockwise, 3 = landscape counter-clockwise. boardPresent() rotates the
+// canvas into the panel buffer, boardTouchRead() maps raw panel touches back into canvas
+// coordinates. The UI lays itself out from UI_W x UI_H. Override from build_flags.
 #ifndef BOARD_ROTATION
-#define BOARD_ROTATION 1
+#define BOARD_ROTATION 0
 #endif
+#if BOARD_ROTATION == 0 || BOARD_ROTATION == 2
+#define UI_W LCD_W
+#define UI_H LCD_H
+#else
 #define UI_W 480
 #define UI_H 320
+#endif
 #define BOARD_PIN_BL 41      // backlight, active high, LEDC PWM
 #define BOARD_PIN_SDA 38
 #define BOARD_PIN_SCL 39
@@ -21,9 +28,9 @@
 // Starts I2C (400 kHz), the panel, the touch controller (reset after the LCD init) and the backlight.
 // Returns false if the canvas/buffers could not be allocated.
 bool boardInit();
-GFXcanvas16 *boardCanvas();      // UI_W x UI_H landscape; draw here, then boardPresent()
+GFXcanvas16 *boardCanvas();      // UI_W x UI_H; draw here, then boardPresent()
 void boardPresent();             // push the whole canvas to the panel (~20 ms; call from ONE task only)
 void boardSetBacklight(uint8_t v);   // 0..255
 // Reads the touch controller with one 39-byte burst. Returns false on I2C error.
-// pressed=false means no finger; x 0..UI_W-1, y 0..UI_H-1 (landscape canvas coordinates) otherwise.
+// pressed=false means no finger; x 0..UI_W-1, y 0..UI_H-1 (canvas coordinates) otherwise.
 bool boardTouchRead(int16_t &x, int16_t &y, bool &pressed);

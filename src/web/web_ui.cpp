@@ -59,7 +59,7 @@ static void handleLive() {
          ",\"local\":\"" + local + "\",\"time\":\"" + timeSource() + "\",\"home\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("")) +
          "\",\"storage\":\"" + gStore->backend() + "\",\"free_mb\":" +
          String(gStore->healthy() ? (long)(gStore->freeBytes() / 1048576ULL) : -1L) +
-         ",\"odometer_offset_mi\":" + String(odometerOffsetMi(), 1);
+         ",\"odometer_offset_mi\":" + String(isfinite(odometerOffsetMi()) ? odometerOffsetMi() : 0.0f, 1);
     {
         const HealthState &h = healthGet();
         j += ",\"regen_est_mi\":" + (isnan(h.estMilesToRegen) ? String("null") : String(h.estMilesToRegen, 0)) +
@@ -107,11 +107,23 @@ float webUiValue(const char *name) {
 // value. See docs/odometer-offset.md.
 static void handleOdometerSet() {
     if (!server.hasArg("dash")) { server.send(400, "text/plain", "missing ?dash=<your odometer reading>"); return; }
-    float dash = server.arg("dash").toFloat();
+    String arg = server.arg("dash");
+    char *end = nullptr;
+    float dash = strtof(arg.c_str(), &end);
+    if (arg.length() == 0 || end == arg.c_str() || *end != '\0' || !isfinite(dash) || dash < 0 || dash > 999999) {
+        server.send(400, "text/plain", "dash must be a number between 0 and 999999");
+        return;
+    }
     float ecu = webUiValue("odometer_mi");
     if (isnan(ecu)) {
         server.send(409, "text/plain",
                      "no live odometer reading yet -- engine needs to be on and the OBD adapter connected first");
+        return;
+    }
+    if (fabsf(dash - ecu) > 5000) {
+        char e[120];
+        snprintf(e, sizeof e, "dash %.0f is more than 5000 mi from the ECU's %.0f -- check the number", dash, ecu);
+        server.send(400, "text/plain", e);
         return;
     }
     odometerOffsetSet(dash, ecu);
@@ -153,6 +165,7 @@ static void handleTime() {
 
 static void handleFiles() {
     String j = "[";
+    StoreLock lock;
     fs::FS *fs = gStore->fs();
     if (fs) {
         File root = fs->open(gStore->dir().length() ? gStore->dir() : String("/"));
@@ -175,11 +188,32 @@ static void handleFiles() {
 static void handleDownload() {
     String name = server.arg("f");
     if (!safeName(name)) { server.send(400, "text/plain", "bad file name"); return; }
-    fs::FS *fs = gStore->fs();
-    File f = fs ? fs->open(gStore->dir() + "/" + name, FILE_READ) : File();
+    // The storage lock is held per chunk read, never across the network send, so logging
+    // keeps going during a long download. The size is a snapshot: a live session keeps growing.
+    File f;
+    size_t size = 0;
+    {
+        StoreLock lock;
+        fs::FS *fs = gStore->fs();
+        f = fs ? fs->open(gStore->dir() + "/" + name, FILE_READ) : File();
+        if (f) size = f.size();
+    }
     if (!f) { server.send(404, "text/plain", "not found or busy"); return; }
     server.sendHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
-    server.streamFile(f, name.endsWith(".csv") ? "text/csv" : "text/plain");
+    server.setContentLength(size);
+    server.send(200, name.endsWith(".csv") ? "text/csv" : "text/plain", "");
+    uint8_t buf[2048];
+    size_t sent = 0;
+    while (sent < size) {
+        size_t n;
+        {
+            StoreLock lock;
+            n = f.read(buf, min(sizeof(buf), size - sent));
+        }
+        if (n == 0 || server.client().write(buf, n) != n) break;
+        sent += n;
+    }
+    StoreLock lock;
     f.close();
 }
 

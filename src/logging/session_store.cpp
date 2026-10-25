@@ -6,37 +6,72 @@
 #include "../config.h"
 #include "../obd/pid_registry.h"
 
-// 4-bit when the board wires D1-D3, else 1-bit. Never formats the card.
+static SemaphoreHandle_t lockHandle() {
+    static SemaphoreHandle_t m = xSemaphoreCreateRecursiveMutex();
+    return m;
+}
+StoreLock::StoreLock() { xSemaphoreTakeRecursive(lockHandle(), portMAX_DELAY); }
+StoreLock::~StoreLock() { xSemaphoreGiveRecursive(lockHandle()); }
+
+// 4-bit when the board wires D1-D3, else 1-bit. Never formats the card. 10 open
+// files: csv + raw + a directory listing + a Telegram send can overlap.
+static const uint8_t SD_MAX_OPEN_FILES = 10;
 static bool mountSd() {
 #if SDMMC_D1_PIN >= 0
     SD_MMC.setPins(SDMMC_CLK_PIN, SDMMC_CMD_PIN, SDMMC_D0_PIN, SDMMC_D1_PIN, SDMMC_D2_PIN, SDMMC_D3_PIN);
-    if (SD_MMC.begin("/sdcard", false, false)) return true;
+    if (SD_MMC.begin("/sdcard", false, false, BOARD_MAX_SDMMC_FREQ, SD_MAX_OPEN_FILES)) return true;
     SD_MMC.end();
 #endif
     SD_MMC.setPins(SDMMC_CLK_PIN, SDMMC_CMD_PIN, SDMMC_D0_PIN);
-    return SD_MMC.begin("/sdcard", true, false);
+    return SD_MMC.begin("/sdcard", true, false, BOARD_MAX_SDMMC_FREQ, SD_MAX_OPEN_FILES);
+}
+
+// Opens session_<boot>.csv; a new file gets the header. Append mode keeps rows
+// already written when reopening after a remount.
+bool SessionStore::openSession(bool append) {
+    String name = dir_ + "/session_" + String(boot_) + ".csv";
+    csv_ = fs_->open(name, append ? FILE_APPEND : FILE_WRITE);
+    if (!csv_) return false;
+    if (csv_.size() == 0) {
+        String header = "millis,unix_time";
+        for (size_t i = 0; i < COLUMN_COUNT; i++) { header += ','; header += columnName(i); }
+        csv_.println(header);
+        csv_.flush();
+    }
+    csvSize_ = csv_.size();
+    return true;
+}
+
+void SessionStore::openRaw() {
+    raw_ = fs_->open(dir_ + "/raw_" + String(boot_) + ".log", FILE_APPEND);
+    rawSize_ = raw_ ? raw_.size() : 0;
+}
+
+static bool useFlash(fs::FS *&fs, const char *&backend, String &dir) {
+    if (!LittleFS.begin(true)) return false;
+    fs = &LittleFS; backend = "flash"; dir = "";
+    return true;
 }
 
 bool SessionStore::begin(uint32_t bootNumber) {
+    StoreLock lock;
     boot_ = bootNumber;
 #if USE_SD
-    if (mountSd()) { fs_ = &SD_MMC; backend_ = "SD"; }
-#endif
-    if (!fs_) {
-        if (!LittleFS.begin(true)) return false;
-        fs_ = &LittleFS;
-        backend_ = "flash";
+    if (mountSd()) {
+        fs_ = &SD_MMC; backend_ = "SD";
+        // Everything lives under dir_ so a shared card (e.g. one that also holds
+        // another device's boot files) is never touched outside /obd.
+        dir_ = "/obd";
+        fs_->mkdir(dir_);
+        // A card that mounts but won't take a file (read-only, damaged FAT) falls back to flash.
+        if (openSession(false)) { ok_ = true; return true; }
+        Serial.println("STORAGE: SD mounted but the session file won't open — using internal flash");
+        SD_MMC.end();
+        fs_ = nullptr;
     }
-    // Everything lives under dir_ so a shared card (e.g. one that also holds
-    // another device's boot files) is never touched outside /obd.
-    if (fs_ != &LittleFS) { dir_ = "/obd"; fs_->mkdir(dir_); }
-    String name = dir_ + "/session_" + String(boot_) + ".csv";
-    csv_ = fs_->open(name, FILE_WRITE);
-    if (!csv_) return false;
-    String header = "millis,unix_time";
-    for (size_t i = 0; i < COLUMN_COUNT; i++) { header += ','; header += columnName(i); }
-    csv_.println(header);
-    csv_.flush();
+#endif
+    if (!useFlash(fs_, backend_, dir_)) return false;
+    if (!openSession(false)) return false;
     ok_ = true;
     return true;
 }
@@ -62,24 +97,36 @@ static void freeFlash(uint32_t currentBoot) {
     }
 }
 
+// LittleFS usedBytes() walks the whole filesystem, so it's checked every 30 s, not every row.
 bool SessionStore::spaceLow() {
-    if (fs_ == &LittleFS) {
+    if (fs_ != &LittleFS) return false;
+    static uint32_t lastCheck = 0;
+    static bool low = false;
+    if (lastCheck == 0 || millis() - lastCheck > 30000) {
+        lastCheck = millis() | 1;
         if (LittleFS.totalBytes() - LittleFS.usedBytes() < 60000) freeFlash(boot_);
-        return LittleFS.totalBytes() - LittleFS.usedBytes() < 30000;
+        low = LittleFS.totalBytes() - LittleFS.usedBytes() < 30000;
     }
-    return false;
+    return low;
 }
 
 void SessionStore::writeRow(uint32_t ms, double unixSec, const float *values, size_t count) {
+    StoreLock lock;
     if (!ok_ || spaceLow()) return;
     String row = String(ms) + ',' + (isnan(unixSec) ? String("") : String(unixSec, 3));
     for (size_t i = 0; i < count; i++) {
         row += ',';
         if (!isnan(values[i])) row += String(values[i], 3);
     }
-    size_t n = csv_.println(row);
-    csv_.flush();
-    noteWrite(n > 0);
+    if (!csv_) { noteWrite(false); return; }
+    csv_.println(row);
+    csv_.flush();   // fsync: the size below then reflects what reached the card
+    // println() only reports bytes copied into the stdio buffer, and flush() returns nothing,
+    // so the real test is whether the file actually grew.
+    size_t sz = csv_.size();
+    bool good = sz > csvSize_;
+    if (good) csvSize_ = sz;
+    noteWrite(good);
 }
 
 // A card that stops accepting writes (contact glitch, vibration, a FAT error) used to fail silently:
@@ -92,8 +139,9 @@ void SessionStore::noteWrite(bool good) {
 }
 
 void SessionStore::recover() {
-    if (millis() - lastRecoverMs_ < 10000) return;   // at most one attempt per 10 s
-    lastRecoverMs_ = millis();
+    StoreLock lock;   // other tasks are kept out of the filesystem while it is remounted
+    if (lastRecoverMs_ != 0 && millis() - lastRecoverMs_ < 10000) return;   // at most one attempt per 10 s
+    lastRecoverMs_ = millis() | 1;
     failStreak_ = 0;
     Serial.printf("STORAGE: writes failing (%lu so far) — remounting\n", (unsigned long)failTotal_);
     if (csv_) csv_.close();
@@ -102,23 +150,19 @@ void SessionStore::recover() {
     if (fs_ == &SD_MMC) {
         SD_MMC.end();
         delay(50);
-        bool up = mountSd();
-        if (up) {
-            String base = dir_ + "/session_" + String(boot_) + ".csv";
-            csv_ = fs_->open(base, FILE_APPEND);
-            raw_ = fs_->open(dir_ + "/raw_" + String(boot_) + ".log", FILE_APPEND);
-            if (csv_) { remounts_++; Serial.println("STORAGE: SD remounted, logging continues"); return; }
+        if (mountSd() && openSession(true)) {
+            openRaw();
+            remounts_++;
+            Serial.println("STORAGE: SD remounted, logging continues");
+            return;
         }
         Serial.println("STORAGE: SD unusable — falling back to internal flash");
-        if (LittleFS.begin(true)) {
-            fs_ = &LittleFS; backend_ = "flash"; dir_ = "";
-            String header = "millis,unix_time";
-            for (size_t i = 0; i < COLUMN_COUNT; i++) { header += ','; header += columnName(i); }
-            csv_ = fs_->open("/session_" + String(boot_) + ".csv", FILE_WRITE);
-            if (csv_) { csv_.println(header); csv_.flush(); } else ok_ = false;
-        } else ok_ = false;
+        if (!useFlash(fs_, backend_, dir_)) { ok_ = false; return; }
     }
 #endif
+    // Flash (first choice, or after the SD gave up): reopen both files in append mode.
+    if (openSession(true)) openRaw();
+    else ok_ = false;
 }
 
 void SessionStore::queueRaw(uint32_t ms, const char *header, const char *request, const String &reply) {
@@ -130,14 +174,23 @@ void SessionStore::queueRaw(uint32_t ms, const char *header, const char *request
 }
 
 void SessionStore::flushRaw() {
+    StoreLock lock;
     if (!ok_ || rawQueue_.length() == 0) return;
     if (spaceLow()) { rawQueue_ = ""; return; }
-    if (!raw_) raw_ = fs_->open(dir_ + "/raw_" + String(boot_) + ".log", FILE_WRITE);
-    if (raw_) { size_t n = raw_.print(rawQueue_); raw_.flush(); noteWrite(n > 0); }
+    if (!raw_) openRaw();
+    if (raw_) {
+        raw_.print(rawQueue_);
+        raw_.flush();
+        size_t sz = raw_.size();
+        bool good = sz > rawSize_;
+        if (good) rawSize_ = sz;
+        noteWrite(good);
+    }
     rawQueue_ = "";
 }
 
 void SessionStore::dumpAll(Print &out) {
+    StoreLock lock;
     if (!fs_) return;
     flushRaw();
     File root = fs_->open(dir_.length() ? dir_ : String("/"));
@@ -149,6 +202,7 @@ void SessionStore::dumpAll(Print &out) {
 }
 
 void SessionStore::eraseAll() {
+    StoreLock lock;
     if (!fs_) return;
     if (csv_) csv_.close();
     if (raw_) raw_.close();
@@ -164,6 +218,7 @@ void SessionStore::eraseAll() {
 }
 
 void SessionStore::tailSession(Print &out, uint32_t boot, int rows) {
+    StoreLock lock;
     if (!fs_) return;
     File f = fs_->open(dir_ + "/session_" + String(boot) + ".csv", FILE_READ);
     if (!f) { out.printf("session_%lu.csv not found\n", (unsigned long)boot); return; }
@@ -182,6 +237,7 @@ void SessionStore::tailSession(Print &out, uint32_t boot, int rows) {
 }
 
 uint64_t SessionStore::cardBytes() const {
+    StoreLock lock;
 #if USE_SD
     if (fs_ == &SD_MMC) return SD_MMC.cardSize();
 #endif
@@ -189,6 +245,7 @@ uint64_t SessionStore::cardBytes() const {
 }
 
 uint64_t SessionStore::freeBytes() const {
+    StoreLock lock;
     if (fs_ == &LittleFS) return LittleFS.totalBytes() - LittleFS.usedBytes();
 #if USE_SD
     if (fs_ == &SD_MMC) return SD_MMC.totalBytes() - SD_MMC.usedBytes();

@@ -12,10 +12,15 @@ static const uint8_t SLOW_WARMUP_MIN_SAMPLES = 3;         // don't judge off one
 static const float WARMUP_COLD_C = 40.0f, WARMUP_DONE_C = 80.0f;
 
 // Next-regen estimate. Regens on this car have started at 17.65-19.61 g; the
-// lowest is the default trigger so the estimate errs towards "sooner".
+// lowest is the default trigger so the estimate errs towards "sooner". The
+// learnt trigger is the median of recent first-in-cycle starts, clamped, so one
+// odd start (a retry after an abort, a forced regen) can't drag it around.
 static const float DEFAULT_TRIGGER_G = 17.65f;
-static const float MIN_TRIGGER_G = 12.0f;        // ignore starts below this (forced/odd regens)
-static const float MIN_LIVE_SPAN_MI = 5.0f;      // live g/mi is too noisy over fewer miles
+static const float TRIGGER_MIN_G = 16.5f, TRIGGER_MAX_G = 20.0f;
+static const float RESET_MAX_DIST_MI = 1.0f;     // a real reset lands near 0 mi...
+static const float RESET_MAX_SOOT_G = 6.0f;      // ...with the filter nearly empty
+static const uint8_t RESET_CONFIRM_ROWS = 2;     // one glitchy row is not a reset
+static const float MIN_LIVE_SPAN_MI = 20.0f;     // live g/mi is too noisy over fewer miles
 static const float MIN_LIVE_RATE = 0.02f;        // g/mi; below this the ratio is meaningless
 static const float MAX_ESTIMATE_MI = 999.0f;
 
@@ -63,7 +68,12 @@ void healthBegin() {
         g_h.lastWarmupMinutes = g_prefs.isKey("lastWarm") ? g_prefs.getFloat("lastWarm", NAN) : NAN;
         g_h.baseSootG = g_prefs.getFloat("baseSoot", 0.0f);
         g_h.baseDistMi = g_prefs.getFloat("baseDist", 0.0f);
-        g_h.triggerSootG = g_prefs.isKey("trigG") ? g_prefs.getFloat("trigG", NAN) : NAN;
+        size_t tn = g_prefs.isKey("trigHist") ? g_prefs.getBytesLength("trigHist") : 0;
+        if (tn == sizeof(g_h.triggerHist)) g_prefs.getBytes("trigHist", g_h.triggerHist, tn);
+        g_h.triggerCount = g_prefs.getUChar("trigCount", 0);
+        g_h.triggerHead = g_prefs.getUChar("trigHead", 0);
+        g_h.cycleHadStart = g_prefs.getBool("cycStart", false);
+        g_h.lastRateGPerMi = g_prefs.isKey("lastRate") ? g_prefs.getFloat("lastRate", NAN) : NAN;
     } else {
         // First boot with this layout (or an older one): start clean and stamp it.
         g_prefs.putUChar("ver", NVS_LAYOUT_VERSION);
@@ -82,7 +92,11 @@ static void healthSave() {
     g_prefs.putFloat("lastWarm", g_h.lastWarmupMinutes);
     g_prefs.putFloat("baseSoot", g_h.baseSootG);
     g_prefs.putFloat("baseDist", g_h.baseDistMi);
-    if (!isnan(g_h.triggerSootG)) g_prefs.putFloat("trigG", g_h.triggerSootG);
+    g_prefs.putBytes("trigHist", g_h.triggerHist, sizeof(g_h.triggerHist));
+    g_prefs.putUChar("trigCount", g_h.triggerCount);
+    g_prefs.putUChar("trigHead", g_h.triggerHead);
+    g_prefs.putBool("cycStart", g_h.cycleHadStart);
+    g_prefs.putFloat("lastRate", g_h.lastRateGPerMi);
     g_dirty = false;
 }
 
@@ -119,30 +133,45 @@ float healthAvgRegenIntervalMi() {
     return n ? sum / n : NAN;
 }
 
-float healthRegenTriggerG() { return isnan(g_h.triggerSootG) ? DEFAULT_TRIGGER_G : g_h.triggerSootG; }
+float healthRegenTriggerG() {
+    if (g_h.triggerCount == 0) return DEFAULT_TRIGGER_G;
+    float m = medianOf(g_h.triggerHist, g_h.triggerCount);
+    return fminf(TRIGGER_MAX_G, fmaxf(TRIGGER_MIN_G, m));
+}
 
-// Two estimates, the live one wins once it's trustworthy:
-//  1. this cycle's rate: (soot now - soot after the last regen) / miles since then,
-//     then (trigger - soot now) / rate. Follows how the car is being driven today.
-//  2. fallback: the historical average regen interval minus miles since the last regen.
-static void updateEstimate(float soot, float dist) {
-    g_h.estMilesToRegen = NAN;
-    g_h.estFromLiveRate = false;
-    g_h.estRateGPerMi = NAN;
-    if (isnan(dist)) return;
-    const float trig = healthRegenTriggerG();
+// This cycle's soot rate since the baseline, NAN until there are enough miles.
+static float liveRate(float soot, float dist) {
+    if (isnan(soot) || isnan(dist) || isnan(g_h.baseSootG)) return NAN;
     float span = dist - g_h.baseDistMi;
-    if (!isnan(soot) && span >= MIN_LIVE_SPAN_MI) {
-        float rate = (soot - g_h.baseSootG) / span;
-        if (rate >= MIN_LIVE_RATE) {
-            g_h.estRateGPerMi = rate;
-            g_h.estFromLiveRate = true;
-            g_h.estMilesToRegen = fminf(MAX_ESTIMATE_MI, fmaxf(0.0f, (trig - soot) / rate));
-            return;
+    if (span < MIN_LIVE_SPAN_MI) return NAN;
+    float rate = (soot - g_h.baseSootG) / span;
+    return rate >= MIN_LIVE_RATE ? rate : NAN;
+}
+
+// Estimates, best first:
+//  1. a soot rate: this cycle's once it has enough miles, else the previous cycle's;
+//     then (trigger - soot now) / rate. Follows how the car is actually being driven.
+//  2. fallback: the historical average regen interval minus miles since the last regen.
+// Computed into locals and stored at the end, so the screen/web tasks never read a
+// half-updated result.
+static void updateEstimate(float soot, float dist) {
+    float miles = NAN, usedRate = NAN;
+    bool fromRate = false;
+    if (!isnan(dist)) {
+        usedRate = liveRate(soot, dist);
+        if (isnan(usedRate)) usedRate = g_h.lastRateGPerMi;
+        if (!isnan(usedRate) && !isnan(soot)) {
+            miles = fminf(MAX_ESTIMATE_MI, fmaxf(0.0f, (healthRegenTriggerG() - soot) / usedRate));
+            fromRate = true;
+        } else {
+            usedRate = NAN;
+            float avg = healthAvgRegenIntervalMi();
+            if (!isnan(avg)) miles = fminf(MAX_ESTIMATE_MI, fmaxf(0.0f, avg - dist));
         }
     }
-    float avg = healthAvgRegenIntervalMi();
-    if (!isnan(avg)) g_h.estMilesToRegen = fminf(MAX_ESTIMATE_MI, fmaxf(0.0f, avg - dist));
+    g_h.estRateGPerMi = usedRate;
+    g_h.estFromLiveRate = fromRate;
+    g_h.estMilesToRegen = miles;
 }
 
 int healthRegensToday() {
@@ -206,6 +235,7 @@ bool healthSlowWarmupAlert() { if (s_slowWarmupPending) { s_slowWarmupPending = 
 // ---- per-row update ----
 static bool s_warming = false;
 static float s_lastDist = NAN;   // previous row's dpf_dist_since_regen_mi
+static uint8_t s_resetRows = 0;  // consecutive rows that look like a completed-regen reset
 static uint32_t s_warmStartMs = 0;
 
 void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
@@ -217,21 +247,38 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
 
     float soot = valAt(values, count, s_colSoot);
     float dist = valAt(values, count, s_colDist);
-    // dist_since_regen dropping means a regen completed: take this row as the new cycle's
-    // starting point. A reset while the board was off leaves the previous cycle's baseline,
-    // which is also near 0 g / 0 mi, so the estimate is still close.
+    // dist_since_regen dropping to ~0 with a near-empty filter, for two rows running, means a
+    // regen completed: the new cycle starts here. A reset while the board was off leaves the
+    // previous cycle's baseline, which is also near 0 g / 0 mi, so the estimate is still close.
     if (!isnan(dist)) {
-        if ((!isnan(s_lastDist) && dist + 0.5f < s_lastDist) || dist + 0.5f < g_h.baseDistMi) {
+        bool dropped = (!isnan(s_lastDist) && dist + 0.5f < s_lastDist) || dist + 0.5f < g_h.baseDistMi;
+        bool looksReset = dist < RESET_MAX_DIST_MI && (isnan(soot) || soot < RESET_MAX_SOOT_G);
+        s_resetRows = (looksReset && (dropped || s_resetRows > 0)) ? (uint8_t)(s_resetRows + 1) : 0;
+        if (s_resetRows == RESET_CONFIRM_ROWS) {
+            float r = liveRate(soot, s_lastDist);   // carry this cycle's rate into the next one
+            if (!isnan(r)) g_h.lastRateGPerMi = r;
             g_h.baseDistMi = dist;
-            g_h.baseSootG = isnan(soot) ? 0.0f : soot;
+            g_h.baseSootG = NAN;   // taken from the first soot reading below
+            g_h.cycleHadStart = false;
             changed = true;
         }
         s_lastDist = dist;
     }
+    // Soot is polled at a different rate from distance, so it can be missing on the reset row.
+    if (isnan(g_h.baseSootG) && !isnan(soot) && !isnan(dist)) {
+        g_h.baseSootG = (dist - g_h.baseDistMi < 2.0f) ? soot : 0.0f;
+        changed = true;
+    }
 
     if (lastEvent.type == RegenEvent::START) {
-        if (!isnan(soot) && soot >= MIN_TRIGGER_G && (isnan(g_h.triggerSootG) || soot < g_h.triggerSootG))
-            g_h.triggerSootG = soot;
+        // Only the first start of a cycle teaches the trigger: later ones are retries after an
+        // abort, at whatever lower level the partial burn left.
+        if (!g_h.cycleHadStart && !isnan(soot)) {
+            g_h.triggerHist[g_h.triggerHead] = soot;
+            g_h.triggerHead = (uint8_t)((g_h.triggerHead + 1) % HealthState::MAX_TRIGGERS);
+            if (g_h.triggerCount < HealthState::MAX_TRIGGERS) g_h.triggerCount++;
+        }
+        g_h.cycleHadStart = true;
         HealthState::RegenRecord &r = g_h.regenHistory[g_h.regenHead];
         r.odometerMi = valAt(values, count, s_colOdo);
         r.milesSincePrev = valAt(values, count, s_colDist);
@@ -246,6 +293,15 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
         if (g_h.regenCount > 0) {
             uint8_t lastIdx = (uint8_t)((g_h.regenHead + HealthState::MAX_REGENS - 1) % HealthState::MAX_REGENS);
             if (!g_h.regenHistory[lastIdx].interrupted) { g_h.regenHistory[lastIdx].interrupted = true; changed = true; }
+        }
+        // An aborted burn drops soot without resetting the distance. Keep the rate seen so far
+        // and measure on from here, so the drop isn't averaged in as slow accumulation.
+        if (!isnan(dist)) {
+            float r = liveRate(soot, dist);
+            if (!isnan(r)) g_h.lastRateGPerMi = r;
+            g_h.baseDistMi = dist;
+            g_h.baseSootG = NAN;
+            changed = true;
         }
     }
 

@@ -7,6 +7,17 @@
 // (raw_<boot>.log) of every unfiltered adapter reply, so anything the decoders
 // don't understand yet can be analysed later without another drive.
 // Backend is internal flash (LittleFS) or an SD card, chosen in config.h.
+// Every use of the storage filesystem from any task (logging loop, web server,
+// Telegram report, UI) holds this recursive lock, so a remount in recover()
+// never runs while another task is inside FatFs. Hold it for short spans only:
+// per file open/read/close, not across a network send.
+struct StoreLock {
+    StoreLock();
+    ~StoreLock();
+    StoreLock(const StoreLock &) = delete;
+    StoreLock &operator=(const StoreLock &) = delete;
+};
+
 class SessionStore {
 public:
     bool begin(uint32_t bootNumber);
@@ -38,6 +49,9 @@ private:
     bool ok_ = false;
     uint8_t failStreak_ = 0;
     uint32_t failTotal_ = 0, remounts_ = 0, lastRecoverMs_ = 0;
+    size_t csvSize_ = 0, rawSize_ = 0;   // file sizes after the last good write
+    bool openSession(bool append);
+    void openRaw();
     void noteWrite(bool good);
     void recover();
     bool spaceLow();

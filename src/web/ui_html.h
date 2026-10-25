@@ -47,7 +47,7 @@ button{background:var(--teal);color:#06231f;border:0;border-radius:8px;padding:9
 <h2>Next regen &amp; mileage</h2>
 <div class="grid">
 <div class="tile"><div class="lbl" id="estl">Next regen (estimate)</div><div class="val na" id="est">—</div></div>
-<div class="tile"><div class="lbl">Soot rate this cycle</div><div class="val na" id="rate">—</div></div>
+<div class="tile"><div class="lbl">Soot rate</div><div class="val na" id="rate">—</div></div>
 <div class="tile"><div class="lbl">Dash mileage (ECU + offset)</div><div class="val na" id="odo">—</div></div>
 <div class="tile"><div class="lbl">Offset vs ECU</div><div class="val" id="off">—</div></div>
 </div>
@@ -97,7 +97,7 @@ async function live(){
  const est=document.getElementById('est');
  if(j.regen_est_mi===null||j.regen_est_mi===undefined){est.className='val na';est.textContent='—';}
  else{est.className='val';est.innerHTML=j.regen_est_mi<1?'due':'~'+j.regen_est_mi+'<small>mi</small>';}
- document.getElementById('estl').textContent='Next regen ('+(j.regen_est_live?'this cycle':'avg interval')+', at '+(+j.regen_trigger_g).toFixed(1)+' g)';
+ document.getElementById('estl').textContent='Next regen ('+(j.regen_est_live?'soot rate, regen at '+(+j.regen_trigger_g).toFixed(1)+' g':'avg interval')+')';
  const rt=document.getElementById('rate');
  if(j.soot_rate_g_mi===null||j.soot_rate_g_mi===undefined){rt.className='val na';rt.textContent='—';}
  else{rt.className='val';rt.innerHTML=j.soot_rate_g_mi.toFixed(2)+'<small>g/mi</small>';}
