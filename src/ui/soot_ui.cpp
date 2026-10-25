@@ -48,6 +48,68 @@ static void drawNet(const UiState &s, int y, const AAFont *const *l, int n, uint
     aaDrawCentered(cv, W / 2, y, buf, aaFit(buf, W - 2 * MARGIN, l, n), col);
 }
 
+#if UI_W < UI_H
+// Portrait 320x480: soot hero on top, the next-regen estimate under it, then a 2-column grid of
+// the live values; clock and network at the top, page dots (pages.cpp) along the bottom 28 px.
+static void cellP(const char *label, const char *val, int x, int y, int w, uint16_t lbl, uint16_t fg, uint16_t valCol) {
+    leftB(label, x, y + 17, fit(label, w, F_LBL), lbl);
+    leftB(val, x, y + 46, fit(val, w, F_BIG), valCol);
+    (void)fg;
+}
+
+static bool portraitDraw(const UiState &s, bool noData, const char *soot, char (*v)[16], uint16_t fg, uint16_t lbl) {
+    const int cx = W / 2, mw = W - 2 * MARGIN;
+    if (noData) {
+        const char *msg = !s.hasData ? "NO LOGGER DATA" : "NO LIVE DATA";
+        centeredT(msg, cx, 150, fit(msg, mw, F_MSG), fg);
+        drawNet(s, 250, F_NET, 3, fg);
+        centeredT(s.clock, cx, 290, aaR24, fg);
+        return true;
+    }
+    if (s.regen) {
+        const uint16_t amber = rgb(0xff, 0xc0, 0x40);
+        centeredT("ACTIVE REGENERATION", cx, 8, fit("ACTIVE REGENERATION", mw, F_HDR), fg);
+        centeredT("DO NOT SWITCH OFF", cx, 42, fit("DO NOT SWITCH OFF", mw, F_RG1), amber);
+        centeredT("UNTIL IT FINISHES", cx, 78, fit("UNTIL IT FINISHES", mw, F_RG1), amber);
+        // soot is the number to watch while it burns
+        centeredT("Soot", cx, 118, aaR17, lbl);
+        centeredT(soot, cx, 136, fit(soot, mw, F_HUGE), amber);   // B90 is 106 px tall: ends at 242
+        static const char *rl[8] = {"Cat. Temp", "Since Regen", "RPM", "Speed", "Coolant", "Diff P.", "Intercooler", "MAF"};
+        const char *rv[8] = {v[4], v[7], v[0], v[1], v[2], v[3], v[5], v[6]};
+        const int colW = W / 2, cw = colW - MARGIN - 4, top = 248, rowH = 50;
+        for (int n = 0; n < 8; n++)
+            cellP(rl[n], rv[n], (n % 2) * colW + MARGIN, top + (n / 2) * rowH, cw, lbl, fg, fg);
+        drawNet(s, H - MARGIN - aaR14.height, F_NET + 2, 1, lbl);
+        return true;
+    }
+    // header: clock left, network right
+    leftB(s.clock, MARGIN, 22, fit(s.clock, W / 2, F_LBL), lbl);
+    const char *ip = s.ip[0] ? s.ip : "no network";
+    aaDrawRight(cv, W - MARGIN, 22 - aaR14.ascent, ip, aaR14, lbl);
+    // soot hero
+    centeredT("SOOT", cx, 32, aaR17, lbl);
+    centeredT(soot, cx, 50, fit(soot, mw, F_HUGE), fg);   // B90 is 106 px tall: ends at 156
+    // next regen estimate
+    char est[40];
+    if (isnan(s.nextRegenMi)) strlcpy(est, "Next regen: -", sizeof est);
+    else if (s.nextRegenMi < 1.0f) strlcpy(est, "Regen due", sizeof est);
+    else snprintf(est, sizeof est, "Next regen ~%.0f mi", s.nextRegenMi);
+    centeredT(est, cx, 162, fit(est, mw, F_HDR), fg);
+    if (!isnan(s.nextRegenMi)) {
+        const char *src = s.nextRegenLive ? "from the soot rate" : "from the average interval";
+        centeredT(src, cx, 192, aaR14, lbl);
+    }
+    cv->drawFastHLine(MARGIN, 214, mw, lbl);
+    // 2 x 4 grid of the live values
+    static const char *gl[8] = {"RPM", "Speed", "Coolant", "Diff P.", "Cat. Temp", "Since Regen", "Odometer", "MAF"};
+    const char *gv[8] = {v[0], v[1], v[2], v[3], v[4], v[7], v[9], v[6]};
+    const int colW = W / 2, cw = colW - MARGIN - 4, top = 222, rowH = 58;
+    for (int n = 0; n < 8; n++)
+        cellP(gl[n], gv[n], (n % 2) * colW + MARGIN, top + (n / 2) * rowH, cw, lbl, fg, fg);
+    return true;
+}
+#endif
+
 void uiBegin() {
     cv = boardCanvas();
 }
@@ -81,6 +143,9 @@ void uiDraw(const UiState &s) {
     else snprintf(v[8], 16, "~%.0f mi", s.nextRegenMi);
     fmt(v[9], 16, s.odometer, 0, " mi");
 
+#if UI_W < UI_H
+    if (portraitDraw(s, noData, soot, v, fg, lbl)) return;
+#endif
     if (noData) {
         const char *msg = !s.hasData ? "NO LOGGER DATA" : "NO LIVE DATA";
         centeredT(msg, cx, 100, fit(msg, W - 2 * MARGIN, F_MSG), fg);
