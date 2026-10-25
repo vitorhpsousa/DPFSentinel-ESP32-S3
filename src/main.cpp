@@ -317,6 +317,7 @@ static void demoFill(UiState &st) {
         st.coolant = 88; st.diffP = 8.0f + idx * 3; st.intercooler = 61; st.maf = 24.3f;
         st.sinceRegen = idx >= 4 ? 180.0f + idx * 40 : 87.4f; st.odometer = 125760;
         st.regen = (idx == 6);
+        st.nextRegenMi = idx >= 4 ? 0.0f : 42.0f; st.nextRegenLive = true;
     }
 }
 
@@ -327,6 +328,7 @@ static void updateScreen() {
     st.intercooler = values[colOf("intercooler_temp_c")]; st.maf = values[colOf("maf_flow")];
     st.sinceRegen = values[colDist]; st.odometer = odometerCorrected(values[colOdo]);
     st.regen = !isnan(values[colRegen]) && values[colRegen] != 0.0f;
+    st.nextRegenMi = healthGet().estMilesToRegen; st.nextRegenLive = healthGet().estFromLiveRate;
     bool any = false;
     for (size_t i = 0; i < PID_TABLE_LEN; i++) if (!isnan(values[i])) { any = true; break; }
     if (any) everHadData = true;
@@ -345,6 +347,7 @@ static void updateScreen() {
     pd.sootHistoryStepMin = 1;
     pd.bleLinked = elm.connected();
     snprintf(pd.sdBackend, sizeof pd.sdBackend, "%s", store.backend());
+    pd.sdCardMB = (uint32_t)(store.cardBytes() / (1024 * 1024));
     // usedBytes() walks the FAT (slow on a 30 GB card). Plenty of room (>1000 MB free at the last check):
     // look again once a day; when it's getting low, every 5 minutes.
     static uint32_t lastFree = 0;
@@ -367,6 +370,8 @@ static void updateScreen() {
         pd.healthOilChangeOdometerMi = h.oilChangeOdometerMi;
         pd.healthLastWarmupMin = h.lastWarmupMinutes;
         pd.healthWarmupMedianMin = healthWarmupMedianMin();
+        pd.healthSootRateGPerMi = h.estRateGPerMi;
+        pd.healthRegenTriggerG = healthRegenTriggerG();
     }
     pagesRender(st, pd);
 }

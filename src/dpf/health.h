@@ -38,6 +38,18 @@ struct HealthState {
     float lastWarmupMinutes = NAN;
 
     float lastBatteryV = NAN;   // live reading, not persisted
+
+    // Next-regen estimate. The baseline is the soot/distance seen right after the
+    // last regen reset dpf_dist_since_regen_mi; triggerSootG is the lowest soot
+    // level a regen has been seen to start at (tightens as regens are logged).
+    // All three are persisted under their own keys.
+    float baseSootG = 0, baseDistMi = 0;
+    float triggerSootG = NAN;   // NAN = none seen yet, the built-in default is used
+
+    // Recomputed every row, not persisted.
+    float estMilesToRegen = NAN;   // NAN = no estimate yet
+    bool estFromLiveRate = false;  // true = this cycle's g/mi, false = historical average interval
+    float estRateGPerMi = NAN;     // this cycle's soot rate (NAN until enough distance)
 };
 
 void healthBegin();   // load from Preferences; call once at boot
@@ -58,6 +70,7 @@ void healthOilChangeNow(float currentOdometerMi);
 
 // Derived readouts for the Health UI page (ui/pages.cpp).
 float healthAvgRegenIntervalMi();   // mean of milesSincePrev over the stored history; NAN if none yet
+float healthRegenTriggerG();        // soot level used as the regen trigger for the estimate
 float healthWarmupMedianMin();      // rolling median warm-up time; NAN if no samples yet
 int healthRegensToday();            // -1 if the clock isn't set yet
 int healthRegensThisWeek();         // -1 if the clock isn't set yet

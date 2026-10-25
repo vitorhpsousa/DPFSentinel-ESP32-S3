@@ -9,6 +9,7 @@
 #include "../report/telegram_report.h"
 #include "ui_html.h"
 #include "../dpf/odometer_offset.h"
+#include "../dpf/health.h"
 
 static WebServer server(80);
 static SessionStore *gStore = nullptr;
@@ -58,7 +59,15 @@ static void handleLive() {
          ",\"local\":\"" + local + "\",\"time\":\"" + timeSource() + "\",\"home\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("")) +
          "\",\"storage\":\"" + gStore->backend() + "\",\"free_mb\":" +
          String(gStore->healthy() ? (long)(gStore->freeBytes() / 1048576ULL) : -1L) +
-         ",\"odometer_offset_mi\":" + String(odometerOffsetMi(), 1) + ",\"values\":{";
+         ",\"odometer_offset_mi\":" + String(odometerOffsetMi(), 1);
+    {
+        const HealthState &h = healthGet();
+        j += ",\"regen_est_mi\":" + (isnan(h.estMilesToRegen) ? String("null") : String(h.estMilesToRegen, 0)) +
+             ",\"regen_est_live\":" + (h.estFromLiveRate ? "1" : "0") +
+             ",\"soot_rate_g_mi\":" + (isnan(h.estRateGPerMi) ? String("null") : String(h.estRateGPerMi, 3)) +
+             ",\"regen_trigger_g\":" + String(healthRegenTriggerG(), 2);
+    }
+    j += ",\"values\":{";
     for (size_t i = 0; i < COLUMN_COUNT; i++) {
         if (i) j += ',';
         j += '"';

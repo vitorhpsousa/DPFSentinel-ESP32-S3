@@ -15,11 +15,9 @@ what's shown to you: the CYD board's screen, and the `odometer_offset_mi` field 
 
 1. With the engine running and the adapter connected (so the logger has a live ECU reading), find the
    board's IP — it's printed to serial at boot, and shown on the CYD screen's system page.
-2. On your phone or any device on the same network, open:
-   ```
-   http://<board-ip>/api/odometer?dash=<your dash's current mileage>
-   ```
-   e.g. `http://10.1.1.29/api/odometer?dash=125624`.
+2. On your phone or any device on the same network, open `http://<board-ip>/`, scroll to
+   **Next regen & mileage**, type the mileage shown on the dash and tap **Save**.
+   (The same thing as a plain URL: `http://<board-ip>/api/odometer?dash=125624`.)
 3. The board replies with the offset it worked out and stored, e.g.
    `offset set: dash 125624 - ECU 125271 = +353.0 mi (applied to the screen from now on)`.
 

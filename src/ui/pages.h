@@ -16,7 +16,8 @@ struct PagesData {
     float maxSpeed;                // km/h
     bool bleLinked;
     char sdBackend[8];
-    uint32_t sdFreeMB;
+    uint32_t sdFreeMB;             // 0 = not checked (SD_FREE_CHECK off) or none
+    uint32_t sdCardMB;             // card capacity, always known when an SD is mounted
     uint32_t bootNumber;
     float batteryV;
     char clockText[24];
@@ -32,6 +33,8 @@ struct PagesData {
     float healthOilChangeOdometerMi;   // 0 = no reference set yet
     float healthLastWarmupMin;         // NAN = none recorded this run
     float healthWarmupMedianMin;       // NAN = no samples yet
+    float healthSootRateGPerMi;        // this cycle's soot rate; NAN = not enough miles yet
+    float healthRegenTriggerG;         // soot level the estimate counts down to
 };
 
 enum PageId { PAGE_SOOT, PAGE_TREND, PAGE_TRIP, PAGE_HEALTH, PAGE_SYSTEM, PAGE_COUNT };

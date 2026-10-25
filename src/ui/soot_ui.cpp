@@ -75,7 +75,10 @@ void uiDraw(const UiState &s) {
     fmt(v[5], 16, s.intercooler, 0, "\xC2\xB0" "C");
     fmt(v[6], 16, s.maf, 1, " g/s");
     fmt(v[7], 16, s.sinceRegen, 1, " mi");
-    strlcpy(v[8], s.regen ? "ACTIVE" : "OFF", 16);
+    // The regen screen takes over while one runs, so this cell shows the estimate instead.
+    if (isnan(s.nextRegenMi)) strlcpy(v[8], "-", 16);
+    else if (s.nextRegenMi < 1.0f) strlcpy(v[8], "due", 16);
+    else snprintf(v[8], 16, "~%.0f mi", s.nextRegenMi);
     fmt(v[9], 16, s.odometer, 0, " mi");
 
     if (noData) {
@@ -109,7 +112,7 @@ void uiDraw(const UiState &s) {
     // RPM, Speed, Coolant, Diff P., Cat. Temp, Intercooler, MAF, Since Regen, Regen, Odometer, IP+SSID.
     // Bottom 20 px: page dots (pages.cpp, centre) and the clock (bottom right).
     static const char *labels[11] = {"RPM", "Speed", "Coolant", "Diff P.", "Cat. Temp",
-                                     "Intercooler", "MAF", "Since Regen", "Regen", "Odometer", "IP"};
+                                     "Intercooler", "MAF", "Since Regen", "Next Regen", "Odometer", "IP"};
     const int colW = W / 2, cellW = colW - MARGIN - 4;
     const int top = MARGIN, bottom = H - 28;
     const int sootH = 56;
@@ -128,6 +131,7 @@ void uiDraw(const UiState &s) {
         const char *lab = labels[n - 1], *val;
         if (n == 11) { lab = ipl; val = s.ip[0] ? s.ip : "no network"; }
         else val = v[n - 1];
+        if (n == 9 && !s.nextRegenLive && !isnan(s.nextRegenMi)) lab = "Next Regen (avg)";
         leftB(lab, x, ry + 15, fit(lab, cellW, F_LBL), lbl);
         leftB(val, x, ry + 40, fit(val, cellW, F_VAL), fg);
     }
