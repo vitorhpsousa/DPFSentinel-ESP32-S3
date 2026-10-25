@@ -7,6 +7,7 @@
 #include "config.h"
 #include "dpf/dpf_monitor.h"
 #include "dpf/health.h"
+#include "dpf/odometer_offset.h"
 #include "logging/session_store.h"
 #include "obd/elm_client.h"
 #include "obd/isotp.h"
@@ -213,6 +214,7 @@ void setup() {
     prefs.putUInt("boot", bootNumber);
     prefs.end();
     healthBegin();
+    odometerOffsetBegin();
 
     for (size_t i = 0; i <= COLUMN_COUNT; i++) values[i] = NAN;
     colRpm = colOf("engine_rpm"); colSpeed = colOf("vehicle_speed"); colLoad = colOf("engine_load_pct");
@@ -323,7 +325,7 @@ static void updateScreen() {
     st.soot = values[colSoot]; st.rpm = values[colRpm]; st.speed = values[colSpeed];
     st.coolant = values[colOf("coolant_temp")]; st.diffP = values[colDp]; st.catTemp = values[colCat];
     st.intercooler = values[colOf("intercooler_temp_c")]; st.maf = values[colOf("maf_flow")];
-    st.sinceRegen = values[colDist]; st.odometer = values[colOdo];
+    st.sinceRegen = values[colDist]; st.odometer = odometerCorrected(values[colOdo]);
     st.regen = !isnan(values[colRegen]) && values[colRegen] != 0.0f;
     bool any = false;
     for (size_t i = 0; i < PID_TABLE_LEN; i++) if (!isnan(values[i])) { any = true; break; }

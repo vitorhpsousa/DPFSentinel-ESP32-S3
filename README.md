@@ -42,6 +42,11 @@ your phone: join the `DPF-Sentinel` hotspot, open `http://192.168.4.1` and it se
 before the clock is known have an empty `unix_time`; `tools/date_session.py` back-fills them from the
 `TIME` marker in the raw log. See [docs/log-format.md](docs/log-format.md).
 
+## Dash mileage doesn't match?
+
+Normal on several cars — the dash and the ECU's own odometer are often two different counters. Set a
+one-time offset with no reflash needed: [docs/odometer-offset.md](docs/odometer-offset.md).
+
 ## Layout
 
 ```

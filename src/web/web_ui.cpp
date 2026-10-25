@@ -8,6 +8,7 @@
 #include "timekeeper.h"
 #include "../report/telegram_report.h"
 #include "ui_html.h"
+#include "../dpf/odometer_offset.h"
 
 static WebServer server(80);
 static SessionStore *gStore = nullptr;
@@ -56,7 +57,8 @@ static void handleLive() {
     j += "{\"t\":" + String(millis()) + ",\"link\":" + (link ? "1" : "0") + ",\"session\":" + String(gBoot) +
          ",\"local\":\"" + local + "\",\"time\":\"" + timeSource() + "\",\"home\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("")) +
          "\",\"storage\":\"" + gStore->backend() + "\",\"free_mb\":" +
-         String(gStore->healthy() ? (long)(gStore->freeBytes() / 1048576ULL) : -1L) + ",\"values\":{";
+         String(gStore->healthy() ? (long)(gStore->freeBytes() / 1048576ULL) : -1L) +
+         ",\"odometer_offset_mi\":" + String(odometerOffsetMi(), 1) + ",\"values\":{";
     for (size_t i = 0; i < COLUMN_COUNT; i++) {
         if (i) j += ',';
         j += '"';
@@ -88,6 +90,26 @@ float webUiValue(const char *name) {
             return v;
         }
     return NAN;
+}
+
+// GET /api/odometer?dash=<your current dash mileage>, with the engine on so there's a live
+// ECU reading to compare against. Sets a constant offset, applied to odometer_mi only where
+// it's shown to a person (the screen, odometer_offset_mi here) -- never to the logged CSV
+// value. See docs/odometer-offset.md.
+static void handleOdometerSet() {
+    if (!server.hasArg("dash")) { server.send(400, "text/plain", "missing ?dash=<your odometer reading>"); return; }
+    float dash = server.arg("dash").toFloat();
+    float ecu = webUiValue("odometer_mi");
+    if (isnan(ecu)) {
+        server.send(409, "text/plain",
+                     "no live odometer reading yet -- engine needs to be on and the OBD adapter connected first");
+        return;
+    }
+    odometerOffsetSet(dash, ecu);
+    char msg[160];
+    snprintf(msg, sizeof(msg), "offset set: dash %.0f - ECU %.0f = %+.1f mi (applied to the screen from now on)",
+             dash, ecu, odometerOffsetMi());
+    server.send(200, "text/plain", msg);
 }
 
 static void handleSend() {
@@ -268,6 +290,7 @@ void webUiBegin(SessionStore *store, uint32_t bootNumber) {
 
     server.on("/", []() { server.send_P(200, "text/html", UI_HTML); });
     server.on("/api/live", handleLive);
+    server.on("/api/odometer", handleOdometerSet);
     server.on("/api/files", handleFiles);
     server.on("/api/time", handleTime);
     server.on("/api/send", handleSend);
