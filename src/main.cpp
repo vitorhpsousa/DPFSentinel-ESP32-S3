@@ -178,7 +178,7 @@ static bool connectAdapter() {
     if (!elm.begin()) return false;
     if (!elm.initAdapter()) { Serial.println("Adapter init sequence failed"); return false; }
     Serial.println("ELM327 adapter ready");
-    for (size_t r = 0; r < reqCount; r++) { reqs[r].nextDue = 0; reqs[r].fails = 0; }
+    for (size_t r = 0; r < reqCount; r++) { reqs[r].nextDue = millis(); reqs[r].fails = 0; }
     return true;
 }
 
@@ -524,7 +524,7 @@ void loop() {
         if (blankRows == BLANK_ROWS_REINIT) {
             Serial.println("No decodable data — re-initialising adapter");
             elm.initAdapter();
-            for (size_t r = 0; r < reqCount; r++) { reqs[r].nextDue = 0; reqs[r].fails = 0; }
+            for (size_t r = 0; r < reqCount; r++) { reqs[r].nextDue = millis(); reqs[r].fails = 0; }
         } else if (blankRows >= BLANK_ROWS_RECONNECT) {
             blankRows = 0;
             Serial.println("Still no data — reconnecting BLE");

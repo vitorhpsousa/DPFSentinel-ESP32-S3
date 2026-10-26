@@ -32,6 +32,11 @@ public:
     fs::FS *fs() const { return fs_; }
     const String &dir() const { return dir_; }
     uint64_t freeBytes() const;
+    // For other tasks streaming a file out (web download, Telegram): each call opens, seeks,
+    // reads and closes under the lock, so no handle survives a remount in recover() (which can
+    // hand the same fd number to the logger's own file). name is relative to dir().
+    size_t fileSize(const String &name);
+    size_t readChunk(const String &name, size_t offset, uint8_t *buf, size_t len);
     uint64_t cardBytes() const;   // raw card capacity from its CSD register: instant, no FAT walk (0 = no SD)
     // Serial maintenance: print every file (for retrieving flash logs) / erase them.
     void dumpAll(Print &out);

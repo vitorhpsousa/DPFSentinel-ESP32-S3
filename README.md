@@ -14,11 +14,17 @@ do not base safety or repair decisions on it. Only the ix35 is verified (see [do
 | Role | Part | Env |
 |---|---|---|
 | OBD adapter | Bluetooth LE ELM327 (Amazon UK B0DQV19QJF) | both |
-| Screen logger | CYD ESP32-S3 3.5" ST77922 320x480 touch, speaker, microSD (B0HGQ5XMQ8) | `cyd35` |
+| Screen logger | CYD ESP32-S3 3.5" ST77922 320x480 touch, speaker, microSD (B0HGQ5XMQ8) | `cyd35` (portrait), `cyd35_flipped`, `cyd35_landscape` |
 | Headless logger | Freenove ESP32-S3 WROOM kit, USB-C, microSD (B0F48DV38M) | `freenove` |
 | Optional | DS3231 RTC on I2C ([wiring](docs/wiring.md)) | both |
 
 Details and pins: [docs/hardware.md](docs/hardware.md).
+
+The screen is portrait by default (short edge at the top, USB-C at the bottom). `cyd35_flipped` turns it
+180°, `cyd35_landscape` keeps the older landscape layout; the setting is `BOARD_ROTATION` in
+`src/board/board.h`. The main screen shows soot, an estimate of the miles to the next regen (from the
+soot rate, counting down to the level this car's regens start at; an estimate, not an ECU value), and the
+live values. The web page can also set a dash-vs-ECU mileage offset: [docs/odometer-offset.md](docs/odometer-offset.md).
 
 ## Quick start
 
@@ -27,7 +33,7 @@ Windows step-by-step: [docs/flashing-windows.md](docs/flashing-windows.md) (macO
 ```bash
 git clone https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3.git && cd DPFSentinel-ESP32-S3
 cp include/secrets.example.h include/secrets.h     # optional: your WiFi for NTP time
-pio run -e cyd35 -t upload                          # or: -e freenove
+pio run -e cyd35 -t upload                          # or: -e cyd35_flipped / cyd35_landscape / freenove
 pio device monitor
 ```
 

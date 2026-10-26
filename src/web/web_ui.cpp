@@ -58,7 +58,7 @@ static void handleLive() {
     j += "{\"t\":" + String(millis()) + ",\"link\":" + (link ? "1" : "0") + ",\"session\":" + String(gBoot) +
          ",\"local\":\"" + local + "\",\"time\":\"" + timeSource() + "\",\"home\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("")) +
          "\",\"storage\":\"" + gStore->backend() + "\",\"free_mb\":" +
-         String(gStore->healthy() ? (long)(gStore->freeBytes() / 1048576ULL) : -1L) +
+         String(SD_FREE_CHECK && gStore->healthy() ? (long)(gStore->freeBytes() / 1048576ULL) : -1L) +
          ",\"odometer_offset_mi\":" + String(isfinite(odometerOffsetMi()) ? odometerOffsetMi() : 0.0f, 1);
     {
         const HealthState &h = healthGet();
@@ -188,33 +188,20 @@ static void handleFiles() {
 static void handleDownload() {
     String name = server.arg("f");
     if (!safeName(name)) { server.send(400, "text/plain", "bad file name"); return; }
-    // The storage lock is held per chunk read, never across the network send, so logging
-    // keeps going during a long download. The size is a snapshot: a live session keeps growing.
-    File f;
-    size_t size = 0;
-    {
-        StoreLock lock;
-        fs::FS *fs = gStore->fs();
-        f = fs ? fs->open(gStore->dir() + "/" + name, FILE_READ) : File();
-        if (f) size = f.size();
-    }
-    if (!f) { server.send(404, "text/plain", "not found or busy"); return; }
+    // Each chunk is opened, read and closed under the storage lock (readChunk), so logging keeps
+    // going during a long download and no handle survives a card remount. The size is a
+    // snapshot: a live session keeps growing.
+    size_t size = gStore->fileSize(name);
+    if (size == 0) { server.send(404, "text/plain", "not found or busy"); return; }
     server.sendHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
     server.setContentLength(size);
     server.send(200, name.endsWith(".csv") ? "text/csv" : "text/plain", "");
     uint8_t buf[2048];
-    size_t sent = 0;
-    while (sent < size) {
-        size_t n;
-        {
-            StoreLock lock;
-            n = f.read(buf, min(sizeof(buf), size - sent));
-        }
+    for (size_t sent = 0; sent < size;) {
+        size_t n = gStore->readChunk(name, sent, buf, min(sizeof(buf), size - sent));
         if (n == 0 || server.client().write(buf, n) != n) break;
         sent += n;
     }
-    StoreLock lock;
-    f.close();
 }
 
 // Two candidate networks (e.g. home Wi-Fi and a phone hotspot), tried

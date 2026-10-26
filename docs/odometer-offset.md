@@ -9,7 +9,8 @@ car, or the OBD adapter.
 
 This project never changes what's logged to the CSV — `odometer_mi` there is always the ECU's raw value,
 so your data stays comparable across sessions and to anyone else's logs. The offset below only affects
-what's shown to you: the CYD board's screen, and the `odometer_offset_mi` field in `/api/live`.
+what's shown to you: the CYD board's screen, the web page's "Dash mileage (ECU + offset)" tile, and the
+`odometer_offset_mi` field in `/api/live`.
 
 ## Setting it
 
