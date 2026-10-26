@@ -9,7 +9,7 @@ Usage:
     python3 tools/fetch_board_logs.py [BOARD_URL] [OUT_DIR]
 
     BOARD_URL defaults to http://obd-logger.local (mDNS name the firmware
-    registers); pass the IP (e.g. http://10.1.1.29) if that doesn't resolve.
+    registers); pass the IP (e.g. http://192.168.1.50) if that doesn't resolve.
     OUT_DIR defaults to logs/cyd_<today's date> next to this repo.
 
 Looks for existing copies in every logs/cyd_*/ and logs/pi-*/ folder (one

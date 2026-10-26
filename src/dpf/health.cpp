@@ -59,6 +59,7 @@ void healthBegin() {
         if (rn == sizeof(g_h.regenHistory)) g_prefs.getBytes("regHist", g_h.regenHistory, rn);
         size_t wn = g_prefs.isKey("warmHist") ? g_prefs.getBytesLength("warmHist") : 0;
         if (wn == sizeof(g_h.warmupMinutes)) g_prefs.getBytes("warmHist", g_h.warmupMinutes, wn);
+        // Counts/heads index fixed arrays: clamp them, a corrupt value would write out of bounds.
         g_h.regenCount = g_prefs.getUChar("regCount", 0);
         g_h.regenHead = g_prefs.getUChar("regHead", 0);
         g_h.warmupCount = g_prefs.getUChar("warmCount", 0);
@@ -74,6 +75,12 @@ void healthBegin() {
         g_h.triggerHead = g_prefs.getUChar("trigHead", 0);
         g_h.cycleHadStart = g_prefs.getBool("cycStart", false);
         g_h.lastRateGPerMi = g_prefs.isKey("lastRate") ? g_prefs.getFloat("lastRate", NAN) : NAN;
+        if (g_h.regenCount > HealthState::MAX_REGENS) g_h.regenCount = HealthState::MAX_REGENS;
+        if (g_h.regenHead >= HealthState::MAX_REGENS) g_h.regenHead = 0;
+        if (g_h.warmupCount > HealthState::MAX_WARMUPS) g_h.warmupCount = HealthState::MAX_WARMUPS;
+        if (g_h.warmupHead >= HealthState::MAX_WARMUPS) g_h.warmupHead = 0;
+        if (g_h.triggerCount > HealthState::MAX_TRIGGERS) g_h.triggerCount = HealthState::MAX_TRIGGERS;
+        if (g_h.triggerHead >= HealthState::MAX_TRIGGERS) g_h.triggerHead = 0;
     } else {
         // First boot with this layout (or an older one): start clean and stamp it.
         g_prefs.putUChar("ver", NVS_LAYOUT_VERSION);
@@ -236,6 +243,7 @@ bool healthSlowWarmupAlert() { if (s_slowWarmupPending) { s_slowWarmupPending = 
 static bool s_warming = false;
 static float s_lastDist = NAN;   // previous row's dpf_dist_since_regen_mi
 static uint8_t s_resetRows = 0;  // consecutive rows that look like a completed-regen reset
+static uint8_t s_behindRows = 0; // consecutive rows with distance below the baseline (reset missed)
 static uint32_t s_warmStartMs = 0;
 
 void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
@@ -254,11 +262,18 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
         bool dropped = (!isnan(s_lastDist) && dist + 0.5f < s_lastDist) || dist + 0.5f < g_h.baseDistMi;
         bool looksReset = dist < RESET_MAX_DIST_MI && (isnan(soot) || soot < RESET_MAX_SOOT_G);
         s_resetRows = (looksReset && (dropped || s_resetRows > 0)) ? (uint8_t)(s_resetRows + 1) : 0;
+        // Distance below the baseline but well past 0: a regen completed while the board was off
+        // and the car has driven on since. Two rows running, so one glitchy reading can't do it.
+        bool behind = dist + 0.5f < g_h.baseDistMi && !looksReset;
+        s_behindRows = behind ? (uint8_t)(s_behindRows + 1) : 0;
         if (s_resetRows == RESET_CONFIRM_ROWS) {
-            float r = liveRate(soot, s_lastDist);   // carry this cycle's rate into the next one
-            if (!isnan(r)) g_h.lastRateGPerMi = r;
             g_h.baseDistMi = dist;
             g_h.baseSootG = NAN;   // taken from the first soot reading below
+            g_h.cycleHadStart = false;
+            changed = true;
+        } else if (s_behindRows == RESET_CONFIRM_ROWS) {
+            g_h.baseDistMi = 0.0f;   // the cycle started at ~0 g / 0 mi, before the board saw it
+            g_h.baseSootG = 0.0f;
             g_h.cycleHadStart = false;
             changed = true;
         }
@@ -273,6 +288,12 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
     if (lastEvent.type == RegenEvent::START) {
         // Only the first start of a cycle teaches the trigger: later ones are retries after an
         // abort, at whatever lower level the partial burn left.
+        if (!g_h.cycleHadStart) {
+            // The first start of a cycle is where this cycle's accumulation rate is measured:
+            // soot is at the trigger and nothing has burned yet. Carried into the next cycle.
+            float r = liveRate(soot, dist);
+            if (!isnan(r)) g_h.lastRateGPerMi = r;
+        }
         if (!g_h.cycleHadStart && !isnan(soot)) {
             g_h.triggerHist[g_h.triggerHead] = soot;
             g_h.triggerHead = (uint8_t)((g_h.triggerHead + 1) % HealthState::MAX_TRIGGERS);
@@ -294,13 +315,12 @@ void healthUpdate(const float *values, size_t count, RegenEvent lastEvent) {
             uint8_t lastIdx = (uint8_t)((g_h.regenHead + HealthState::MAX_REGENS - 1) % HealthState::MAX_REGENS);
             if (!g_h.regenHistory[lastIdx].interrupted) { g_h.regenHistory[lastIdx].interrupted = true; changed = true; }
         }
-        // An aborted burn drops soot without resetting the distance. Keep the rate seen so far
-        // and measure on from here, so the drop isn't averaged in as slow accumulation.
+        // An aborted burn drops soot without resetting the distance. The rate was taken at the
+        // start (before the burn); measure on from here, so the drop isn't averaged in as slow
+        // accumulation.
         if (!isnan(dist)) {
-            float r = liveRate(soot, dist);
-            if (!isnan(r)) g_h.lastRateGPerMi = r;
             g_h.baseDistMi = dist;
-            g_h.baseSootG = NAN;
+            g_h.baseSootG = soot;   // NAN = taken from the next soot reading
             changed = true;
         }
     }

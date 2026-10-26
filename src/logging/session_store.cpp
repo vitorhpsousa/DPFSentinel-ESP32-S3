@@ -157,12 +157,13 @@ void SessionStore::recover() {
             return;
         }
         Serial.println("STORAGE: SD unusable — falling back to internal flash");
-        if (!useFlash(fs_, backend_, dir_)) { ok_ = false; return; }
+        SD_MMC.end();   // may still be mounted if only the file reopen failed
+        // No flash either: stay ok_ with no open file, so writeRow keeps retrying every 10 s.
+        if (!useFlash(fs_, backend_, dir_)) return;
     }
 #endif
     // Flash (first choice, or after the SD gave up): reopen both files in append mode.
-    if (openSession(true)) openRaw();
-    else ok_ = false;
+    if (openSession(true)) openRaw();   // else: retried from writeRow via recover() in 10 s
 }
 
 void SessionStore::queueRaw(uint32_t ms, const char *header, const char *request, const String &reply) {
@@ -234,6 +235,25 @@ void SessionStore::tailSession(Print &out, uint32_t boot, int rows) {
     out.println(header);
     out.print(idx >= 0 ? body.substring(idx + 1) : body);
     out.println("--- END TAIL ---");
+}
+
+size_t SessionStore::fileSize(const String &name) {
+    StoreLock lock;
+    if (!fs_) return 0;
+    File f = fs_->open(dir_ + "/" + name, FILE_READ);
+    size_t n = f ? f.size() : 0;
+    if (f) f.close();
+    return n;
+}
+
+size_t SessionStore::readChunk(const String &name, size_t offset, uint8_t *buf, size_t len) {
+    StoreLock lock;
+    if (!fs_) return 0;
+    File f = fs_->open(dir_ + "/" + name, FILE_READ);
+    if (!f) return 0;
+    size_t n = f.seek(offset) ? f.read(buf, len) : 0;
+    f.close();
+    return n;
 }
 
 uint64_t SessionStore::cardBytes() const {

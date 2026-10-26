@@ -68,19 +68,14 @@ static bool sendMessage(const String &text) {
     return ok;
 }
 
-static bool sendFile(const String &path, const String &name, const String &caption) {
-    File f;
-    size_t size = 0;
-    {
-        StoreLock lock;   // per open/read/close only, never across the network send
-        f = gStore->fs()->open(path, FILE_READ);
-        if (f) size = f.size();   // snapshot: the live session may still be growing
-    }
-    if (!f) return false;
-    auto closeFile = [&]() { StoreLock lock; f.close(); };
+// name is relative to the store's dir. Reads go through readChunk (open/read/close per chunk
+// under the storage lock), so no file handle is held across the network send or a card remount.
+static bool sendFile(const String &name, const String &caption) {
+    size_t size = gStore->fileSize(name);   // snapshot: the live session may still be growing
+    if (size == 0) return false;
 
     WiFiClientSecure tls; WiFiClient plain; Client *c = nullptr;
-    if (!openConn(tls, plain, c)) { closeFile(); return false; }
+    if (!openConn(tls, plain, c)) return false;
 
     const String B = "----obdlogger7e3f9a";
     String head = "--" + B + "\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + TG_CHAT_ID +
@@ -95,17 +90,12 @@ static bool sendFile(const String &path, const String &name, const String &capti
     uint8_t buf[1024];
     size_t sent = 0;
     while (sent < size) {
-        size_t n;
-        {
-            StoreLock lock;
-            n = f.read(buf, min(sizeof(buf), size - sent));
-        }
+        size_t n = gStore->readChunk(name, sent, buf, min(sizeof(buf), size - sent));
         if (n == 0) break;
-        if (c->write(buf, n) != n) { closeFile(); c->stop(); return false; }
+        if (c->write(buf, n) != n) { c->stop(); return false; }
         sent += n;
         vTaskDelay(1);
     }
-    closeFile();
     if (sent != size) { c->stop(); return false; }
     c->print(tail);
     String body;
@@ -175,7 +165,7 @@ static bool runReport(bool force, uint32_t today) {
     uint32_t lastGoodBoot = sentBoot;
     for (auto &x : files) {
         Serial.printf("Report: sending %s (%u bytes)\n", x.name.c_str(), (unsigned)x.size);
-        if (!sendFile(String(gStore->dir()) + "/" + x.name, x.name, x.name + " (" + fmtBytes(x.size) + ")")) {
+        if (!sendFile(x.name, x.name + " (" + fmtBytes(x.size) + ")")) {
             nvPut("tg_boot", lastGoodBoot);
             gLastResult = "failed on " + x.name;
             return false;
@@ -362,7 +352,8 @@ static void reportTask(void *) {
         Serial.println(force ? "Report: sending now (requested)" : "Report: daily send time reached");
         bool ok = runReport(force, today);
         Serial.printf("Report: %s\n", gLastResult.c_str());
-        if (!ok) gRetryAfter = millis() + 10UL * 60UL * 1000UL;   // try again in 10 minutes
+        // try again in 10 minutes; cleared on success so a stale value can't block reports ~25 days later
+        gRetryAfter = ok ? 0 : (millis() + 10UL * 60UL * 1000UL) | 1;
     }
 }
 

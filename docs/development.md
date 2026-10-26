@@ -1,7 +1,7 @@
 # Development
 
 ```bash
-pio run -e cyd35        # build screen firmware
+pio run -e cyd35        # build screen firmware (portrait; cyd35_flipped / cyd35_landscape for the others)
 pio run -e freenove     # build headless firmware
 pio test -e native      # host tests: ISO-TP reassembly + decoders against real captured replies
 ```
