@@ -64,6 +64,7 @@ static void handleLive() {
         const HealthState &h = healthGet();
         j += ",\"regen_est_mi\":" + (isnan(h.estMilesToRegen) ? String("null") : String(h.estMilesToRegen, 0)) +
              ",\"regen_est_live\":" + (h.estFromLiveRate ? "1" : "0") +
+             ",\"regen_not_soon\":" + (h.estNotSoon ? "1" : "0") +
              ",\"soot_rate_g_mi\":" + (isnan(h.estRateGPerMi) ? String("null") : String(h.estRateGPerMi, 3)) +
              ",\"regen_trigger_g\":" + String(healthRegenTriggerG(), 2);
     }

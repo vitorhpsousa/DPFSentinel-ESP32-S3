@@ -23,6 +23,10 @@ static const uint8_t RESET_CONFIRM_ROWS = 2;     // one glitchy row is not a res
 static const float MIN_LIVE_SPAN_MI = 20.0f;     // live g/mi is too noisy over fewer miles
 static const float MIN_LIVE_RATE = 0.02f;        // g/mi; below this the ratio is meaningless
 static const float MAX_ESTIMATE_MI = 999.0f;
+// Soot on this car sits low for the first half of a cycle and then climbs, so a rate measured early
+// can't place a regen 50-250 mi away. Replayed over 12 logged cycles, the estimate was typically
+// 28-37 mi off below 12 g and 6-10 mi off above it: below this level the screen says "not soon".
+static const float SHOW_FROM_SOOT_G = 12.0f;
 
 // Bumped whenever HealthState's on-disk layout changes, so a stale blob from
 // an older build is discarded instead of read as garbage.
@@ -178,6 +182,7 @@ static void updateEstimate(float soot, float dist) {
     }
     g_h.estRateGPerMi = usedRate;
     g_h.estFromLiveRate = fromRate;
+    g_h.estNotSoon = !isnan(soot) && soot < SHOW_FROM_SOOT_G;
     g_h.estMilesToRegen = miles;
 }
 

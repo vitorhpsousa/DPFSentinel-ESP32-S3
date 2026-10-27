@@ -91,11 +91,14 @@ static bool portraitDraw(const UiState &s, bool noData, const char *soot, char (
     centeredT(soot, cx, 50, fit(soot, mw, F_HUGE), fg);   // B90 is 106 px tall: ends at 156
     // next regen estimate
     char est[40];
-    if (isnan(s.nextRegenMi)) strlcpy(est, "Next regen: -", sizeof est);
+    if (s.nextRegenNotSoon) strlcpy(est, "Next regen: not soon", sizeof est);
+    else if (isnan(s.nextRegenMi)) strlcpy(est, "Next regen: -", sizeof est);
     else if (s.nextRegenMi < 1.0f) strlcpy(est, "Regen due", sizeof est);
     else snprintf(est, sizeof est, "Next regen ~%.0f mi", s.nextRegenMi);
     centeredT(est, cx, 162, fit(est, mw, F_HDR), fg);
-    if (!isnan(s.nextRegenMi)) {
+    if (s.nextRegenNotSoon) {
+        centeredT("miles shown from 12 g of soot", cx, 192, aaR14, lbl);
+    } else if (!isnan(s.nextRegenMi)) {
         const char *src = s.nextRegenLive ? "from the soot rate" : "from the average interval";
         centeredT(src, cx, 192, aaR14, lbl);
     }
@@ -138,7 +141,8 @@ void uiDraw(const UiState &s) {
     fmt(v[6], 16, s.maf, 1, " g/s");
     fmt(v[7], 16, s.sinceRegen, 1, " mi");
     // The regen screen takes over while one runs, so this cell shows the estimate instead.
-    if (isnan(s.nextRegenMi)) strlcpy(v[8], "-", 16);
+    if (s.nextRegenNotSoon) strlcpy(v[8], "not soon", 16);
+    else if (isnan(s.nextRegenMi)) strlcpy(v[8], "-", 16);
     else if (s.nextRegenMi < 1.0f) strlcpy(v[8], "due", 16);
     else snprintf(v[8], 16, "~%.0f mi", s.nextRegenMi);
     fmt(v[9], 16, s.odometer, 0, " mi");
@@ -196,7 +200,7 @@ void uiDraw(const UiState &s) {
         const char *lab = labels[n - 1], *val;
         if (n == 11) { lab = ipl; val = s.ip[0] ? s.ip : "no network"; }
         else val = v[n - 1];
-        if (n == 9 && !s.nextRegenLive && !isnan(s.nextRegenMi)) lab = "Next Regen (avg)";
+        if (n == 9 && !s.nextRegenNotSoon && !s.nextRegenLive && !isnan(s.nextRegenMi)) lab = "Next Regen (avg)";
         leftB(lab, x, ry + 15, fit(lab, cellW, F_LBL), lbl);
         leftB(val, x, ry + 40, fit(val, cellW, F_VAL), fg);
     }

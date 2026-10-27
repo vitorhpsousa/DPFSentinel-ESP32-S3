@@ -95,9 +95,10 @@ async function live(){
  if(v.dpf_regen_active===1){b.className='banner regen';b.textContent=v.dpf_regen_burning===1?'DPF regeneration in progress — burning':'DPF regeneration in progress — heating up';}
  else if(v.engine_rpm!==null&&v.engine_rpm<=1100&&v.dpf_diff_pressure_hpa!==null&&v.dpf_diff_pressure_hpa>=20){b.className='banner idle';b.textContent='Idle DPF pressure at or above 20 hPa — compare against a hot-engine reading';}
  const est=document.getElementById('est');
- if(j.regen_est_mi===null||j.regen_est_mi===undefined){est.className='val na';est.textContent='—';}
+ if(j.regen_not_soon){est.className='val';est.textContent='not soon';}
+ else if(j.regen_est_mi===null||j.regen_est_mi===undefined){est.className='val na';est.textContent='—';}
  else{est.className='val';est.innerHTML=j.regen_est_mi<1?'due':'~'+j.regen_est_mi+'<small>mi</small>';}
- document.getElementById('estl').textContent='Next regen ('+(j.regen_est_live?'soot rate, regen at '+(+j.regen_trigger_g).toFixed(1)+' g':'avg interval')+')';
+ document.getElementById('estl').textContent=j.regen_not_soon?'Next regen (miles shown from 12 g of soot)':'Next regen ('+(j.regen_est_live?'soot rate, regen at '+(+j.regen_trigger_g).toFixed(1)+' g':'avg interval')+')';
  const rt=document.getElementById('rate');
  if(j.soot_rate_g_mi===null||j.soot_rate_g_mi===undefined){rt.className='val na';rt.textContent='—';}
  else{rt.className='val';rt.innerHTML=j.soot_rate_g_mi.toFixed(2)+'<small>g/mi</small>';}

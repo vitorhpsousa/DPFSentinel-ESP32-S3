@@ -53,6 +53,7 @@ struct HealthState {
     // Recomputed every row, not persisted.
     float estMilesToRegen = NAN;   // NAN = no estimate yet
     bool estFromLiveRate = false;  // true = from a soot rate, false = historical average interval
+    bool estNotSoon = false;       // soot below the level where the estimate is trustworthy: show "not soon"
     float estRateGPerMi = NAN;     // soot rate used: this cycle's, or the previous cycle's until enough miles
 };
 
