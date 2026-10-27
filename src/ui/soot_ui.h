@@ -6,7 +6,8 @@
 struct UiState {
     float soot, rpm, speed, coolant, diffP, catTemp, intercooler, maf, sinceRegen, odometer;  // NaN = missing
     float nextRegenMi;    // estimated miles to the next regen; NaN = no estimate yet
-    bool nextRegenLive;   // true = from this cycle's soot rate, false = from the average interval
+    bool nextRegenLive;
+    bool nextRegenNotSoon;  // soot too low for a useful figure: show "not soon" instead of nextRegenMi   // true = from this cycle's soot rate, false = from the average interval
     bool regen;
     bool hasData;  // false -> "NO LOGGER DATA"
     bool stale;    // true (with hasData) -> "NO LIVE DATA"

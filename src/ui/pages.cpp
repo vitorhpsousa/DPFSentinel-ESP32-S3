@@ -153,11 +153,12 @@ static void drawHealth(const UiState &ui, const PagesData &d) {
     fmtf(b, sizeof b, ui.sinceRegen, 1, " mi"); rowAt(L0, L1, y, "Since last", b); y += S;
     fmtf(b, sizeof b, d.healthAvgRegenIntervalMi, 0, " mi avg"); rowAt(L0, L1, y, "Avg interval", b); y += S;
     snprintf(b, sizeof b, "%u", d.healthRegensSinceOil); rowAt(L0, L1, y, "Since oil", b); y += S;
-    if (isnan(ui.nextRegenMi)) rowAt(L0, L1, y, "Next regen", "-");
+    if (ui.nextRegenNotSoon) rowAt(L0, L1, y, "Next regen", "not soon");
+    else if (isnan(ui.nextRegenMi)) rowAt(L0, L1, y, "Next regen", "-");
     else if (ui.nextRegenMi < 1.0f) rowAt(L0, L1, y, "Next regen", "due", C_AMB());
     else { snprintf(b, sizeof b, "~%.0f mi", ui.nextRegenMi); rowAt(L0, L1, y, "Next regen", b); }
     y += S;
-    rowAt(L0, L1, y, "Estimate", isnan(ui.nextRegenMi) ? "-" : ui.nextRegenLive ? "soot rate" : "avg interval");
+    rowAt(L0, L1, y, "Estimate", ui.nextRegenNotSoon ? "from 12 g" : isnan(ui.nextRegenMi) ? "-" : ui.nextRegenLive ? "soot rate" : "avg interval");
 
     if (PORTRAIT) { y += S + 8; s_cv->drawFastHLine(M, y - 6, W - 2 * M, C_DIM()); R0 = L0; }
     else { s_cv->drawFastVLine(W / 2, 50, H - 50 - 30, C_DIM()); y = 50; }

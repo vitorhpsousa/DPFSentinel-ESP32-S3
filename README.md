@@ -23,8 +23,9 @@ Details and pins: [docs/hardware.md](docs/hardware.md).
 The screen is portrait by default (short edge at the top, USB-C at the bottom). `cyd35_flipped` turns it
 180°, `cyd35_landscape` keeps the older landscape layout; the setting is `BOARD_ROTATION` in
 `src/board/board.h`. The main screen shows soot, an estimate of the miles to the next regen (from the
-soot rate, counting down to the level this car's regens start at; an estimate, not an ECU value), and the
-live values. The web page can also set a dash-vs-ECU mileage offset: [docs/odometer-offset.md](docs/odometer-offset.md).
+soot rate, counting down to the level this car's regens start at; an estimate, not an ECU value; below
+12 g of soot it shows "not soon", because replayed over logged cycles it was typically 30+ mi off there),
+and the live values. The web page can also set a dash-vs-ECU mileage offset: [docs/odometer-offset.md](docs/odometer-offset.md).
 
 ## Quick start
 
