@@ -32,7 +32,8 @@ and the live values. The web page can also set a dash-vs-ECU mileage offset: [do
 
 ## Quick start
 
-Windows step-by-step: [docs/flashing-windows.md](docs/flashing-windows.md) (macOS/Linux guides to follow).
+Full step-by-step guides for Windows, macOS and Linux: [docs/deploy-cyd35.md](docs/deploy-cyd35.md) (screen board) and
+[docs/deploy-freenove.md](docs/deploy-freenove.md) (headless board). Shorter Windows version: [docs/flashing-windows.md](docs/flashing-windows.md).
 
 ```bash
 git clone https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3.git && cd DPFSentinel-ESP32-S3
@@ -64,10 +65,18 @@ one-time offset with no reflash needed: [docs/odometer-offset.md](docs/odometer-
 src/            firmware (obd/ logging/ dpf/ web/ report/ + cyd-only board/ input/ audio/ ui/)
 include/        secrets.example.h  (copy to secrets.h, gitignored)
 test/           native unit tests built from real captured replies:  pio test -e native
-tools/          log helpers (date back-fill, fetch logs over Wi-Fi, Car Scanner log solver), single-board export, font generator
+tools/          log helpers (date back-fill, fetch logs over Wi-Fi), other-car discovery + Car Scanner solver, export, fonts
 docs/           hardware, wiring, log format, PIDs, development, known issues
 logs/examples/  a real driving session
 ```
+
+## Docs
+
+- Step-by-step install: [CYD screen board](docs/deploy-cyd35.md) · [Freenove headless board](docs/deploy-freenove.md) · [Windows quick flash](docs/flashing-windows.md)
+- [Hardware](docs/hardware.md) · [Wiring (optional RTC)](docs/wiring.md) · [Telegram alerts](docs/telegram-setup.md) · [Dash mileage offset](docs/odometer-offset.md)
+- [Log format](docs/log-format.md) · [Verified PIDs and decoding](docs/pids.md) · [ix35 known issues](docs/ix35-known-issues.md)
+- [Adapting to another car](docs/other-cars.md) · [Tools](tools/README.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
+- [Disclaimer](docs/disclaimer.md)
 
 If this saves you a DPF job, you can support the project on [Ko-fi](https://ko-fi.com/vitoi).
 
