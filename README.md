@@ -3,7 +3,10 @@
 A small, **read-only** OBD-II logger for the diesel particulate filter (DPF) of a 2014 Hyundai ix35 1.7 CRDi.
 It reads soot level, differential pressure, exhaust temperature and regeneration state about once a second
 over a BLE ELM327 adapter and **saves everything to a microSD card**. On the screen board it also shows a
-colour-coded soot panel. [Telegram alerts](docs/telegram-setup.md) tell you when a regeneration starts and finishes.
+colour-coded soot panel. Optional [Telegram alerts](docs/telegram-setup.md) tell you when a regeneration starts and
+finishes (on by default on the headless Freenove build, off on the screen builds until you enable them). A web page
+(`http://192.168.4.1` on the board's hotspot, or `http://obd-logger.local` on your Wi-Fi) shows live tiles, the next-regen
+estimate and dash mileage, the last 2 minutes as charts, and the log files to download.
 
 The goal is a legal, non-invasive way to catch a clogging DPF early and keep regenerations completing —
 the opposite of DPF/EGR "delete" tuning, which is illegal for road use and harmful. Not a diagnostic tool;
@@ -45,7 +48,8 @@ switched USB socket.
 ## Where is the time from?
 
 No RTC is required. The clock is set from a DS3231 if fitted, else NTP when your WiFi is in range, else from
-your phone: join the `DPF-Sentinel` hotspot, open `http://192.168.4.1` and it sets the time. Rows logged
+your phone: join the `DPF-Sentinel` hotspot (password `change-me-please` unless you set `WIFI_AP_PASS` in
+`include/secrets.h`; change it, and it is also printed on serial at boot), open `http://192.168.4.1` and it sets the time. Rows logged
 before the clock is known have an empty `unix_time`; `tools/date_session.py` back-fills them from the
 `TIME` marker in the raw log. See [docs/log-format.md](docs/log-format.md).
 
@@ -60,7 +64,7 @@ one-time offset with no reflash needed: [docs/odometer-offset.md](docs/odometer-
 src/            firmware (obd/ logging/ dpf/ web/ report/ + cyd-only board/ input/ audio/ ui/)
 include/        secrets.example.h  (copy to secrets.h, gitignored)
 test/           native unit tests built from real captured replies:  pio test -e native
-tools/          log helpers (date back-fill, Car Scanner log solver)
+tools/          log helpers (date back-fill, fetch logs over Wi-Fi, Car Scanner log solver), single-board export, font generator
 docs/           hardware, wiring, log format, PIDs, development, known issues
 logs/examples/  a real driving session
 ```

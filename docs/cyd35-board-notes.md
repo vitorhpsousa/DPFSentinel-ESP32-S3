@@ -1,5 +1,9 @@
 # 3.5" ESP32-S3 touch board notes (2026-09-26)
 
+> Research notes from board bring-up (2026-09). The pins in `src/` are the verified ones; where these notes
+> say "untested" or point to files that aren't in this repo, the firmware has since settled it.
+
+
 Target: Amazon UK B0HGQ5XMQ8 "CYD ESP32 S3 Display ... 3.5 Inch IPS Capacitive Touch 320x480 ST77922 HMI Module, XiaoZhiAI, Audio Speaker Horn".
 Factory firmware strings: '3.5_ESP32S3_AP_%d', LVGL. 16MB flash, 8MB PSRAM, SD 4-bit SDMMC, ES8311.
 
@@ -10,7 +14,7 @@ Factory firmware strings: '3.5_ESP32S3_AP_%d', LVGL. 16MB flash, 8MB PSRAM, SD 4
 
 ## 1. ES3C35P (ST77922) - primary candidate
 
-Sources: [J] https://github.com/jlmeredith/ES3C35P (docs/HARDWARE.md, graded); [X] https://github.com/78/xiaozhi-esp32/tree/main/main/boards/lcdwiki-es3c35p (config.h); [L] https://www.lcdwiki.com/3.5inch_ESP32-S3_Display; [T] https://github.com/tivnantu/esp32-for-fun-docs (01-hardware.md).
+Sources: [J] https://github.com/jlmeredith/ES3C35P (docs/HARDWARE.md, graded); [X] https://github.com/78/xiaozhi-esp32/tree/main/main/boards/lcdwiki-es3c35p (config.h); [L] https://www.lcdwiki.com/3.5inch_ESP32-S3_Display ; [T] https://github.com/tivnantu/esp32-for-fun-docs (01-hardware.md).
 "probed" = J's author exercised it on ONE unit. "vendor" = LCDWiki tables only, not exercised.
 
 | Function | GPIO / value | Status (source) |

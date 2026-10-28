@@ -2,17 +2,17 @@
 
 Researched 2026-09-26. Not professional or legal advice.
 
-Tags: [V] = statement read on a page I actually fetched this session. [U] = unverified (search-result snippet only, forum hearsay, or my own engineering guess).
+Tags: [V] = statement read on a page that was actually fetched during the research. [U] = unverified (search-result snippet only, forum hearsay, or an engineering guess).
 Blocked/unreadable pages (not used as [V]): autodoc.co.uk blog (403), justanswer.* (403), mhhauto.com (403), hyundai-forums via tollbit redirect (402), carchecker.pro (429). The oil-dilution, limp-mode and pump claims below therefore come from search snippets and are [U].
 
 Honest summary of the evidence: there is NO public, citable Hyundai TSB or recall specific to D4FD DPF/EGR/turbo that I could find. Fault mileages are mostly not given by the sources. Numeric thresholds in section 3 are my guesses unless stated.
 
-## 0. What the logger already has (from pid_registry.py and memory)
+## 0. What the logger already has (see src/obd/pid_registry.h)
 
-Mode 01: engine_rpm, coolant_temp, vehicle_speed, maf_flow (g/s), engine_load_pct, egr_duty_pct (012C), intake_air_temp_c, dpf_zone_temp_c (really catalyst temp 013E). Battery voltage is PID 0142 per memory but is NOT yet in the Pi registry (memory says "port newest PIDs (0142) to the Pi registry"; the S3 has it).
+Mode 01: engine_rpm, coolant_temp, vehicle_speed, maf_flow (g/s), engine_load_pct, egr_duty_pct (012C), intake_air_temp_c, dpf_zone_temp_c (really catalyst temp 013E), control_module_v (battery voltage, 0142).
 Mode 21 on 7E0: dpf_diff_pressure_hpa (211B), dpf_soot_level_g and intercooler_temp_c (21948001), egt_before_dpf_c, dpf_dist_since_regen_mi, odometer_mi, dpf_regen_active, dpf_regen_burning (2103). Derived: dpf_odo_at_last_regen_mi. Steering ECU 7D4: eps_speed, eps_steering, eps_voltage.
-Not available: MAP/boost (010B unsupported), fuel level, mode 22, rail pressure (the brief mentions a "rail pressure probe" but it is not in pid_registry.py; treat as not available on the Pi until verified). No oil temp, no oil level, no oil-dilution PID, no DTC reading in the registry.
-Regen alerts (start/finish/interrupted) already exist on the S3 (report/regen_watch.cpp).
+Not available: MAP/boost (010B unsupported), fuel level, mode 22, rail pressure (not found on this ECU yet). No oil temp, no oil level, no oil-dilution PID, no DTC reading in the registry.
+Regen alerts (start/finish/interrupted) already exist (src/report/regen_watch.cpp).
 
 ## 1. Known issues table
 
@@ -49,7 +49,7 @@ Mileage column: only what a source states; "n/s" = not stated.
 
 ## 2. Watch-list for the owner (practical)
 
-1. Short trips: the sources agree short, low-load journeys prevent DPF regeneration ([V] carsguide, autozilla, technicalparameters). The owner's 3-mile rides already pushed soot from 12.2 to 17.6 g (project memory). Plan a proper 30+ minute steady run (about 60 mph / 2000+ rpm range is my guess [U]) whenever soot is high. CarsGuide's advice is roughly an hour at motorway speed every 3-4 weeks [V].
+1. Short trips: the sources agree short, low-load journeys prevent DPF regeneration ([V] carsguide, autozilla, technicalparameters). On the test car, a run of 3-mile rides pushed soot from 12.2 to 17.6 g. Plan a proper 30+ minute steady run (about 60 mph / 2000+ rpm range is my guess [U]) whenever soot is high. CarsGuide's advice is roughly an hour at motorway speed every 3-4 weeks [V].
 2. Do not interrupt a regen (engine running, fan, higher idle, fuel economy dip). One owner reports a regen lasting about 15 miles [V singletrack]. Finish the drive.
 3. Oil: check the dipstick monthly and before long trips. A RISING level (not falling) suggests fuel dilution [V carsguide]. Diesel smell or thin oil on the stick is a warning [U]. Use the correct low-SAPS oil (5W-30 low SAPS per [V] selectedworld) and follow the owner's-manual interval; on a short-trip car with regens, shortening the interval is common practice [U] and an oil analysis is offered as a diagnostic [V carsguide]. I did not find a Hyundai UK interval for a DPF car on a fetched page.
 4. Early symptoms per sources: reduced power, hesitation, more smoke, warning lights, worse economy, odd odours, difficulty starting ([V] autozilla, selectedworld). Blue/grey smoke with burning-oil smell = turbo seals [V].
@@ -58,15 +58,15 @@ Mileage column: only what a source states; "n/s" = not stated.
 7. Chain: rattle on cold start is the flagged symptom [V technicalparameters].
 8. Battery: dimming lights, slow cranking, battery light; watch the logged voltage (section 3) [U].
 9. Fuel quality/filter: injector problems tied to poor fuel [V selectedworld]; use good fuel and change the fuel filter on schedule.
-10. Confirm any DPF "off/tuning" advice from forums is not applicable: removing a DPF is illegal for road use in the UK (MOT emissions failure) [U, general knowledge, not verified this session].
+10. Confirm any DPF "off/tuning" advice from forums is not applicable: removing a DPF is illegal for road use in the UK (MOT emissions failure) [U, general knowledge, not verified against a source].
 
 ## 3. Proposed derived metrics and alerts
 
-All numbers are guesses [U] unless a value is from a source; calibrate against the owner's own logs first (the Open items in memory already list "hot-idle pressure baseline"). "Screen page" = the 3.5" soot/dashboard panel or the Waveshare board; "Telegram" = an S3 alert rule modelled on regen_watch.cpp.
+All numbers are guesses [U] unless a value is from a source; calibrate against your own car's logs first (a hot-idle pressure baseline is still an open item). "Screen page" = a page on the 3.5" screen board; "Telegram" = an alert rule modelled on src/report/regen_watch.cpp.
 
 | # | Metric (derived from) | Rule (guess) | Issue covered | Screen page | Telegram |
 |---|---|---|---|---|---|
-| 1 | Soot g vs time and per mile, split by trip type (soot_g, odometer, speed, trip length) | Log soot delta and miles per trip; classify trip short (<10 mi or <15 min) vs long. Alert if soot > 16 g (the owner's own 12-17.6 g range; Car Scanner reference top is the memory note) and no long trip since. | DPF clogging | Soot panel: soot bar plus "g per 10 mi (short/long)" | Warn at >=16 g and >=20 g "do a long drive" |
+| 1 | Soot g vs time and per mile, split by trip type (soot_g, odometer, speed, trip length) | Log soot delta and miles per trip; classify trip short (<10 mi or <15 min) vs long. Alert if soot > 16 g (the test car's own 12-17.6 g range) and no long trip since. | DPF clogging | Soot panel: soot bar plus "g per 10 mi (short/long)" | Warn at >=16 g and >=20 g "do a long drive" |
 | 2 | Regen counter and interval (regen_active edges, dist_since_regen reset, odometer) | Store miles and days between regen starts. Alert when interval < 100 mi for 3 consecutive regens (owner in singletrack saw ~80 vs expected ~300 [V]; expected interval for THIS car should be learned from own data). | Frequent regen -> oil dilution, sensor or EGR fault | Regen history page: last 5 intervals | "Regens too frequent: N mi" |
 | 3 | Failed / interrupted regen counter (regen_active 1->0 without dist_since_regen reset, or without burning=1) | Count per 30 days; alert on any interrupted regen, escalate at 2 in a row. Already partly built (regen_watch). | Failed regen, short trips | Regen page badge | Interrupted alert (exists) plus "2nd interrupted regen in a row" |
 | 4 | Time since last complete regen (dist_since_regen_mi, days) | Warn when dist_since_regen > 1.5x the learned median interval, or > 300 mi; and soot > 14 g [guess]. | DPF loading | Main page: "since regen" chip goes amber/red | Daily-report line |
@@ -89,9 +89,9 @@ Design notes: compute on hot, steady conditions only (coolant > 80 C) to keep ba
 
 ## 4. Open questions
 
-1. Is the "rail pressure probe" mentioned in the brief real? It is not in pid_registry.py. If it exists on the S3, high-pressure pump / injector monitoring (rail pressure vs demand, cranking rail pressure) becomes possible.
+1. Does this ECU expose rail pressure? It is not in the PID registry yet. If it does, high-pressure pump / injector monitoring (rail pressure vs demand, cranking rail pressure) becomes possible.
 2. What is the correct oil grade/spec and service interval for this VIN in the UK owner's manual (I could not fetch a Hyundai document)? Is there a Hyundai TSB on oil dilution for D4FD?
-3. What is a healthy idle diff pressure for this car at hot idle, post-regen? Needs the owner's data (memory open item).
+3. What is a healthy idle diff pressure for this car at hot idle, post-regen? Needs logged data from the car (open item).
 4. Can the ECU expose more useful mode 21/22 data (oil dilution counter, ash load estimate, DTCs via mode 03/07/0A)? Adding mode 03/07 DTC reads would help limp-mode and failed-regen classification.
 5. Does the VIN fall in the ABS recall build window (06/08/2013 - 02/06/2015)? Check at gov.uk.
 6. The 70k km high-pressure pump and 120-180k km turbo figures are snippet-level; verify with a fetched source or a specialist.

@@ -304,7 +304,7 @@ void webUiBegin(SessionStore *store, uint32_t bootNumber) {
     for (size_t i = 0; i < COLUMN_COUNT; i++) gValues[i] = NAN;
 
     for (size_t i = 0; i < COLUMN_COUNT; i++) if (!strcmp(columnName(i), "engine_rpm")) gRpmCol = (int)i;
-    setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0", 1);
+    setenv("TZ", TZ_RULE, 1);
     tzset();
     WiFi.persistent(false);
     WiFi.setAutoReconnect(false);

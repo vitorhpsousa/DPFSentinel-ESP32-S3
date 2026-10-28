@@ -319,7 +319,7 @@ static void demoFill(UiState &st) {
     if (idx >= 2) {
         st.soot = soot[idx]; st.catTemp = egt[idx]; st.rpm = idx == 6 ? 1900 : 1450; st.speed = idx == 6 ? 0 : 42;
         st.coolant = 88; st.diffP = 8.0f + idx * 3; st.intercooler = 61; st.maf = 24.3f;
-        st.sinceRegen = idx >= 4 ? 180.0f + idx * 40 : 87.4f; st.odometer = 125760;
+        st.sinceRegen = idx >= 4 ? 180.0f + idx * 40 : 87.4f; st.odometer = 85000;
         st.regen = (idx == 6);
         st.nextRegenMi = idx >= 4 ? 0.0f : 42.0f; st.nextRegenLive = true; st.nextRegenNotSoon = idx == 2;
     }

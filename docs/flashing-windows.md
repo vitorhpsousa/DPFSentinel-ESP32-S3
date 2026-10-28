@@ -21,9 +21,9 @@ cd DPFSentinel-ESP32-S3
 copy include\secrets.example.h include\secrets.h
 notepad include\secrets.h
 ```
-While the repo is private, Git for Windows opens a browser window to sign in to GitHub the first time you clone.
 Optional: put your WiFi name and password in `secrets.h` (2.4 GHz only). Leave empty for a first test — logging to SD
-works without WiFi, and the `DPF-Sentinel` hotspot is always available.
+works without WiFi, and the `DPF-Sentinel` hotspot is always available (password `change-me-please` until you set
+`WIFI_AP_PASS` in `secrets.h` — do change it).
 
 ## 3. Connect the board and find its port
 Plug the board in, then in PowerShell: `pio device list`. Look for a `COMx` entry (Device Manager > Ports shows the same).
@@ -42,8 +42,10 @@ python -m esptool --chip esp32s3 --port COM5 read_flash 0 0x1000000 cyd_factory_
 ## 5. Build and flash
 Insert a FAT32 microSD card first if you want to see logging work immediately.
 ```powershell
-pio run -e cyd35 -t upload        # CYD screen board
-pio run -e freenove -t upload     # Freenove headless board
+pio run -e cyd35 -t upload             # CYD screen board, portrait, USB-C at the bottom
+pio run -e cyd35_flipped -t upload     # same, turned 180 deg
+pio run -e cyd35_landscape -t upload   # same, landscape layout
+pio run -e freenove -t upload          # Freenove headless board
 ```
 If PlatformIO picks the wrong port add `--upload-port COM5`.
 **If upload says "Failed to connect":** hold **BOOT**, tap **RESET** (or plug in while holding BOOT), release BOOT, then run
@@ -60,7 +62,7 @@ Note: opening the serial port resets the board and starts a new session file.
 
 ## 7. Next steps
 - Plug the adapter into the car with the ignition on, power the board, and watch the monitor for `ELM327 adapter ready`.
-- Set the clock: join the `DPF-Sentinel` WiFi on your phone, open http://192.168.4.1.
+- Set the clock: join the `DPF-Sentinel` WiFi on your phone (password as above), open http://192.168.4.1.
 - Read the card on the PC: files are in the `obd` folder.
 - Developers: `pio test -e native` needs a compiler on PATH (MinGW-w64/MSYS2); skip it if you only flash.
 

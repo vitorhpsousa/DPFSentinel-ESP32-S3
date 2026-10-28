@@ -10,11 +10,11 @@ Usage:
 
     BOARD_URL defaults to http://obd-logger.local (mDNS name the firmware
     registers); pass the IP (e.g. http://192.168.1.50) if that doesn't resolve.
-    OUT_DIR defaults to logs/cyd_<today's date> next to this repo.
+    OUT_DIR defaults to logs/cyd_<today's date> in this repo (logs/ is gitignored
+    apart from logs/examples/).
 
-Looks for existing copies in every logs/cyd_*/ and logs/pi-*/ folder (one
-directory up from this repo, i.e. ../OBD/logs/ if you're set up the usual
-way) — edit SEARCH_ROOTS below if your logs live somewhere else.
+Skips files already saved in any logs/cyd_*/ folder in this repo — edit
+SEARCH_ROOTS below if your logs live somewhere else.
 """
 import json
 import os
@@ -61,7 +61,7 @@ def fetch(url, timeout=30):
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_URL
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root
-    obd_logs = os.path.join(os.path.dirname(here), "OBD", "logs")
+    obd_logs = os.path.join(here, "logs")
     out_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(obd_logs, time.strftime("cyd_%Y-%m-%d"))
     os.makedirs(out_dir, exist_ok=True)
 

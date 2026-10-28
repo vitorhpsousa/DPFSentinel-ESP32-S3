@@ -3,3 +3,6 @@
 __pycache__/
 include/secrets.h
 .DS_Store
+# fetched/pulled logs stay local; only the examples are published
+logs/*
+!logs/examples/

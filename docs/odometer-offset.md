@@ -18,9 +18,9 @@ what's shown to you: the CYD board's screen, the web page's "Dash mileage (ECU +
    board's IP — it's printed to serial at boot, and shown on the CYD screen's system page.
 2. On your phone or any device on the same network, open `http://<board-ip>/`, scroll to
    **Next regen & mileage**, type the mileage shown on the dash and tap **Save**.
-   (The same thing as a plain URL: `http://<board-ip>/api/odometer?dash=125624`.)
+   (The same thing as a plain URL: `http://<board-ip>/api/odometer?dash=85000`.)
 3. The board replies with the offset it worked out and stored, e.g.
-   `offset set: dash 125624 - ECU 125271 = +353.0 mi (applied to the screen from now on)`.
+   `offset set: dash 85000 - ECU 84650 = +350.0 mi (applied to the screen from now on)`.
 
 That's it — no reflashing, no rebuild. The offset is saved to flash (NVS) and survives a reboot or power
 cut. It's a single constant, so it only needs setting once unless you fit a different-size wheel/tyre on

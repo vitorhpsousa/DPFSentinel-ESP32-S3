@@ -52,7 +52,7 @@ button{background:var(--teal);color:#06231f;border:0;border-radius:8px;padding:9
 <div class="tile"><div class="lbl">Offset vs ECU</div><div class="val" id="off">—</div></div>
 </div>
 <div class="tile" style="margin-top:10px"><div class="lbl">Set the mileage shown on the dash clock (engine on, adapter connected)</div>
-<form id="odof"><input id="dash" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 125850" required><button>Save</button></form>
+<form id="odof"><input id="dash" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 85000" required><button>Save</button></form>
 <div class="msg" id="odomsg"></div></div>
 <h2>Last 2 minutes</h2>
 <div class="charts">

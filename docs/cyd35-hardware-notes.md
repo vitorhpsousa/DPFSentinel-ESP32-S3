@@ -1,5 +1,9 @@
 # Factory firmware static analysis (2026-09-26)
 
+> Research notes from board bring-up (2026-09). The pins in `src/` are the verified ones; where these notes
+> say "untested" or point to files that aren't in this repo, the firmware has since settled it.
+
+
 File: backup/factory_flash_16MB.bin (read-only analysis). app0 = flash 0x10000, extracted and disassembled with xtensa-esp32s3-elf-objdump (binary wrapped into an ELF with objcopy at VMA 0x42000020).
 Addresses: "app0+X" = offset inside the app0 partition; "V" = virtual address. app0 file offset = V - 0x3c0f0020 + 0x20 for the DROM segment, V - 0x42000020 + 0x110020 for the IROM segment, V - 0x3fc97e00 + 0x10066c for .data.
 
@@ -59,7 +63,7 @@ Addresses: "app0+X" = offset inside the app0 partition; "V" = virtual address. a
 - GUESS: TE pin 42 - a movi 42 is stored into the same config block at V=0x4200436e..0x4200437a (offset +36) next to values 13 and 3, but I did not prove which struct member it is. Matches jlmeredith's claim.
 
 ## Backlight
-- PROVEN: GPIO 41 driven by LEDC PWM, NOT a plain GPIO. ledc_timer_config at V=0x42004335..0x42004341 (speed mode 0, duty resolution 10, timer 1?, freq 0x1388 = 5000 Hz, offsets consistent with ledc_timer_config_t) and ledc_channel_config with gpio_num=41 at V=0x4200431f. This contradicts board_notes.md ("PWM needs LEDC; dimming untested"): the factory firmware does dim by PWM at 5 kHz, 10-bit.
+- PROVEN: GPIO 41 driven by LEDC PWM, NOT a plain GPIO. ledc_timer_config at V=0x42004335..0x42004341 (speed mode 0, duty resolution 10, timer 1?, freq 0x1388 = 5000 Hz, offsets consistent with ledc_timer_config_t) and ledc_channel_config with gpio_num=41 at V=0x4200431f. This contradicts cyd35-board-notes.md ("PWM needs LEDC; dimming untested"): the factory firmware does dim by PWM at 5 kHz, 10-bit.
 - GUESS: active-high (not directly determined; a brightness function at V=0x42003ee8 maps 0..100 to duty).
 
 ## Touch
@@ -81,7 +85,7 @@ Addresses: "app0+X" = offset inside the app0 partition; "V" = virtual address. a
 - PROVEN: SD_MMC.setPins call at V=0x42002fc8..0x42002fdb (Arduino setPins(clk,cmd,d0,d1,d2,d3)): a11=5 (CLK), a12=4 (CMD), a13=6 (D0), a14=7 (D1), a15=2 (D2), stack arg = 3 (D3). Matches notes exactly. A second setPins-style call site exists at V=0x42002f70 region (same values, retry path). Mount point string "/sdcard" and test file "/SDCard_test.txt" exist.
 - GUESS: 4-bit mode is used by begin() (mode-1bit argument not decoded); notes say 4-bit.
 
-## Comparison with board_notes.md
+## Comparison with cyd35-board-notes.md
 All of these are confirmed by the firmware: LCD CS 10, CLK 12, D0..D3 = 11/13/14/9, no LCD RST, touch I2C 38/39 addr 0x55, touch RST 48 / INT 47, ES8311 0x18, I2S 17/18/21/15/16, SD 5/4/6/7/2/3, panel 320x480, init sequence.
 Differences/new facts: (1) backlight GPIO 41 is LEDC PWM 5 kHz/10-bit in the factory firmware; (2) LCD SPI clock 80 MHz in factory firmware; (3) I2C at 400 kHz; (4) PA GPIO 1 polarity looks active HIGH in the firmware (unresolved); (5) I2S sample rate 16 kHz, 16-bit, MCLK x256.
 Not found in the firmware: battery ADC (GPIO 8), WS2812 (GPIO 40), TE 42 (only a guess); no such code path in this demo.
