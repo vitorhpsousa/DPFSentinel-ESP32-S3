@@ -6,7 +6,8 @@
 // ---- WiFi (optional) ----------------------------------------------------------------------
 // Networks to join for NTP time and the web page. 2.4 GHz only (ESP32 cannot use 5 GHz).
 // Example:  #define WIFI_STA_SSID "MyHomeWifi"     #define WIFI_STA_PASS "my wifi password"
-// SSID2 is a second network (e.g. your phone hotspot), tried alternately.
+// SSID2 is a second network (e.g. your phone hotspot), tried alternately. Both are only looked for at power-up
+// and while the engine is off (every 10 min), never while driving.
 #define WIFI_STA_SSID  ""
 #define WIFI_STA_PASS  ""
 #define WIFI_STA_SSID2 ""

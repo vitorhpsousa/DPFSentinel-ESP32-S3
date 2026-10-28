@@ -14,7 +14,7 @@ verified on this unit**: first boot should print `Logging to SD`; if it says fla
 ## OBD adapter
 A BLE ELM327 clone. The firmware scans for names containing OBD/ELM/VLINK/VEEPEAK/IOS-, auto-detects the UART
 characteristics and prints them. Pin them in `src/config.h` (`BLE_TARGET_ADDRESS`) once known. If the adapter turns
-out to be Bluetooth Classic only, an ESP32-S3 cannot use it (BLE only) — use the Pi build later.
+out to be Bluetooth Classic only, an ESP32-S3 cannot use it (BLE only): such adapters are not supported.
 Only one BLE central can connect at a time: close the phone app first.
 
 ## Power

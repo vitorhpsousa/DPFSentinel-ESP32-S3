@@ -12,5 +12,5 @@ pio test -e native      # host tests: ISO-TP reassembly + decoders against real 
 - Discovery aids: `BLE_SCAN_ONLY`, `BLE_DUMP_SERVICES` in `config.h`. `SERIAL_RAW_ECHO 1` prints every exchange.
 - Serial commands (115200): `d` dump logs, `p` tail current session, `e` erase logs, `O` oil-change reference
   reset; CYD only: `D`/`G` demo, `a r s l` alert sounds, `1 2` jingles.
-- Telegram: set `ENABLE_TELEGRAM 1`, put token/chat id in `include/secrets.h`, and give it WiFi with internet.
+- Telegram: on the CYD builds set `ENABLE_TELEGRAM 1` (freenove already has it on), put token/chat id in `include/secrets.h`, and give it WiFi with internet.
 - Never commit `include/secrets.h`.
