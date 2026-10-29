@@ -123,8 +123,13 @@ static void nvPut(const char *key, uint32_t v) {
     p.end();
 }
 
+static const size_t TG_MAX_FILES = 10;   // per report: the newest ones; older unsent files are skipped, not queued
+
 static bool runReport(bool force, uint32_t today) {
     uint32_t sentBoot = nvGet("tg_boot");
+    // First report on this board (Telegram just switched on): start from now instead of uploading
+    // every log the card has ever held.
+    if (sentBoot == 0 && gBoot > 1) { sentBoot = gBoot - 1; nvPut("tg_boot", sentBoot); }
 
     struct F { String name; int n; size_t size; };
     std::vector<F> files;
@@ -138,13 +143,19 @@ static bool runReport(bool force, uint32_t today) {
         nm = nm.substring(nm.lastIndexOf('/') + 1);
         int n = fileNumber(nm);
         bool isCsv = nm.startsWith("session_"), isRaw = nm.startsWith("raw_");
-        if (n < 0 || (!isCsv && !isRaw) || (uint32_t)n <= sentBoot && n != (int)gBoot) continue;
+        // The live session (gBoot) is still being written: it goes out with the next report.
+        if (n < 0 || (!isCsv && !isRaw) || (uint32_t)n <= sentBoot || n == (int)gBoot) continue;
         if (isRaw && !TG_SEND_RAW) continue;
         if (f.size() < TG_MIN_BYTES && !force) continue;   // skip blank/no-adapter sessions (an on-demand send includes everything)
         files.push_back({nm, n, f.size()});
     }
     }
     std::sort(files.begin(), files.end(), [](const F &a, const F &b) { return a.n != b.n ? a.n < b.n : a.name < b.name; });
+    uint32_t skippedUpTo = sentBoot;
+    if (files.size() > TG_MAX_FILES) {
+        skippedUpTo = files[files.size() - TG_MAX_FILES - 1].n;   // older ones are marked as handled
+        files.erase(files.begin(), files.end() - TG_MAX_FILES);
+    }
 
     size_t total = 0;
     for (auto &x : files) total += x.size;
@@ -159,6 +170,7 @@ static bool runReport(bool force, uint32_t today) {
     else
         msg += "No live engine reading right now (car off or adapter out of range).\n";
     if (strlen(KOFI_URL) > 0) msg += "\nFound this useful? " + String(KOFI_URL) + "\n";
+    if (skippedUpTo > sentBoot) { nvPut("tg_boot", skippedUpTo); sentBoot = skippedUpTo; }
     if (files.empty() && !force) { nvPut("tg_day", today); gLastResult = "nothing new to send"; return true; }
     if (!sendMessage(msg)) { gLastResult = "message failed"; return false; }
 
@@ -322,7 +334,13 @@ static void reportTask(void *) {
         vTaskDelay(pdMS_TO_TICKS(5000));
         if (strlen(TG_BOT_TOKEN) == 0 || WiFi.status() != WL_CONNECTED || !timeValid()) continue;
         drainEvents();                                   // alerts first, every 5 s
-        pollStatusCommand();                              // then check for an incoming /status request
+        // Each poll is a fresh TLS handshake (a second or two of CPU), so /status requests are only
+        // checked every 30 s; an on-demand status (/api/statusnow) goes out at the next pass.
+        static uint32_t pollPass = 0;
+        if (++pollPass % 6 == 0) pollStatusCommand();
+#if !TG_STATUS_ENABLED
+        if (gForceStatus) { gForceStatus = false; sendMessage(statusReplyText()); }
+#endif
 #if TG_STATUS_ENABLED
         // Only reachable while the outer check above already found it online,
         // so this can't build a backlog while offline — it just doesn't run.
@@ -382,7 +400,9 @@ void reportBegin(SessionStore *store, uint32_t bootNumber) {
     gBoot = bootNumber;
     if (strlen(TG_BOT_TOKEN) == 0) { Serial.println("Telegram report: off (no bot token set)"); return; }
     Serial.printf("Telegram report: daily at %02d:%02d local time\n", TG_SEND_HOUR, TG_SEND_MIN);
-    xTaskCreatePinnedToCore(reportTask, "report", 16384, nullptr, 1, nullptr, 0);
+    // Priority 0 (below the UI and web tasks on this core): TLS handshakes are CPU-heavy and must
+    // never make the touchscreen or the web page lag. Messages just go out a little later.
+    xTaskCreatePinnedToCore(reportTask, "report", 16384, nullptr, 0, nullptr, 0);
 }
 
 #endif  // ENABLE_TELEGRAM

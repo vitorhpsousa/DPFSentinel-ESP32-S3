@@ -71,8 +71,8 @@ void healthBegin() {
         g_h.regensSinceOil = g_prefs.getUShort("sinceOil", 0);
         g_h.oilChangeOdometerMi = g_prefs.isKey("oilOdo") ? g_prefs.getFloat("oilOdo", 0.0f) : 0.0f;
         g_h.lastWarmupMinutes = g_prefs.isKey("lastWarm") ? g_prefs.getFloat("lastWarm", NAN) : NAN;
-        g_h.baseSootG = g_prefs.getFloat("baseSoot", 0.0f);
-        g_h.baseDistMi = g_prefs.getFloat("baseDist", 0.0f);
+        g_h.baseSootG = g_prefs.isKey("baseSoot") ? g_prefs.getFloat("baseSoot", 0.0f) : 0.0f;
+        g_h.baseDistMi = g_prefs.isKey("baseDist") ? g_prefs.getFloat("baseDist", 0.0f) : 0.0f;
         size_t tn = g_prefs.isKey("trigHist") ? g_prefs.getBytesLength("trigHist") : 0;
         if (tn == sizeof(g_h.triggerHist)) g_prefs.getBytes("trigHist", g_h.triggerHist, tn);
         g_h.triggerCount = g_prefs.getUChar("trigCount", 0);

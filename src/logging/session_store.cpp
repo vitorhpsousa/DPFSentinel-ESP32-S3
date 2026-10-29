@@ -1,4 +1,6 @@
 #include "session_store.h"
+#include <esp_heap_caps.h>
+#include <errno.h>
 #include <LittleFS.h>
 #include <SD.h>
 #include <SD_MMC.h>
@@ -32,19 +34,20 @@ bool SessionStore::openSession(bool append) {
     String name = dir_ + "/session_" + String(boot_) + ".csv";
     csv_ = fs_->open(name, append ? FILE_APPEND : FILE_WRITE);
     if (!csv_) return false;
-    if (csv_.size() == 0) {
+    // A new file always gets the header. (File::size() is unreliable for a just-created file on this
+    // framework, so it is only trusted for an existing file reopened in append mode.)
+    if (!append || csv_.size() == 0) {
         String header = "millis,unix_time";
         for (size_t i = 0; i < COLUMN_COUNT; i++) { header += ','; header += columnName(i); }
         csv_.println(header);
         csv_.flush();
     }
-    csvSize_ = csv_.size();
     return true;
 }
 
 void SessionStore::openRaw() {
     raw_ = fs_->open(dir_ + "/raw_" + String(boot_) + ".log", FILE_APPEND);
-    rawSize_ = raw_ ? raw_.size() : 0;
+
 }
 
 static bool useFlash(fs::FS *&fs, const char *&backend, String &dir) {
@@ -119,14 +122,11 @@ void SessionStore::writeRow(uint32_t ms, double unixSec, const float *values, si
         if (!isnan(values[i])) row += String(values[i], 3);
     }
     if (!csv_) { noteWrite(false); return; }
-    csv_.println(row);
-    csv_.flush();   // fsync: the size below then reflects what reached the card
-    // println() only reports bytes copied into the stdio buffer, and flush() returns nothing,
-    // so the real test is whether the file actually grew.
-    size_t sz = csv_.size();
-    bool good = sz > csvSize_;
-    if (good) csvSize_ = sz;
-    noteWrite(good);
+    // Failure = the write call refused the data. (A file-size check was tried and reverted: on this
+    // framework File::size() can be garbage for a just-created file, which made it remount in a loop.)
+    size_t n = csv_.println(row);
+    csv_.flush();
+    noteWrite(n > 0);
 }
 
 // A card that stops accepting writes (contact glitch, vibration, a FAT error) used to fail silently:
@@ -143,7 +143,10 @@ void SessionStore::recover() {
     if (lastRecoverMs_ != 0 && millis() - lastRecoverMs_ < 10000) return;   // at most one attempt per 10 s
     lastRecoverMs_ = millis() | 1;
     failStreak_ = 0;
-    Serial.printf("STORAGE: writes failing (%lu so far) — remounting\n", (unsigned long)failTotal_);
+    Serial.printf("STORAGE: writes failing (%lu so far) — remounting | DMA free %u largest %u | internal free %u | PSRAM free %u\n",
+                  (unsigned long)failTotal_, (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     if (csv_) csv_.close();
     if (raw_) raw_.close();
 #if USE_SD
@@ -180,12 +183,9 @@ void SessionStore::flushRaw() {
     if (spaceLow()) { rawQueue_ = ""; return; }
     if (!raw_) openRaw();
     if (raw_) {
-        raw_.print(rawQueue_);
+        size_t n = raw_.print(rawQueue_);
         raw_.flush();
-        size_t sz = raw_.size();
-        bool good = sz > rawSize_;
-        if (good) rawSize_ = sz;
-        noteWrite(good);
+        noteWrite(n > 0);
     }
     rawQueue_ = "";
 }
