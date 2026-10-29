@@ -54,7 +54,6 @@ private:
     bool ok_ = false;
     uint8_t failStreak_ = 0;
     uint32_t failTotal_ = 0, remounts_ = 0, lastRecoverMs_ = 0;
-    size_t csvSize_ = 0, rawSize_ = 0;   // file sizes after the last good write
     bool openSession(bool append);
     void openRaw();
     void noteWrite(bool good);

@@ -83,10 +83,13 @@
 // Telegram sends regeneration start/finish alerts and a daily summary. It stays quiet until a token and chat id
 // are filled in include/secrets.h (no token = Telegram off at run time, nothing breaks).
 // (how to get them: docs/telegram-setup.md). A token without a colon, or a token without a chat id, stops the build.
+// include/secrets.h may define ENABLE_TELEGRAM 1 to switch it on for the screen build too.
+#ifndef ENABLE_TELEGRAM
 #ifdef BOARD_FREENOVE
 #define ENABLE_TELEGRAM 1   // ON: no screen, so Telegram is how you hear about a regen
 #else
 #define ENABLE_TELEGRAM 0
+#endif
 #endif
 #define TG_ALERT_WIFI 1
 #define TG_ALERT_REGEN 1        // regen start/finish alerts (also drives the on-device regen beeps)

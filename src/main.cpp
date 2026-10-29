@@ -185,7 +185,10 @@ static bool connectAdapter() {
 void setup() {
     Serial.begin(115200);
 #if ARDUINO_USB_CDC_ON_BOOT
-    Serial.setTxTimeoutMs(0);   // never stall on a full USB buffer when no computer is attached
+    // Give up on a full USB buffer after 5 ms (computer attached but not reading, or none at all).
+    // Not 0: in arduino-esp32 2.0.17 HWCDC::write() counts its retries down from the timeout, and
+    // from 0 that wraps to ~4 billion, i.e. it waits until someone opens the port (froze setup).
+    Serial.setTxTimeoutMs(5);
 #endif
     // Native USB needs ~1 s to reconnect after a reset: wait (max 3 s) so the first lines are not lost.
     for (uint32_t t0 = millis(); !Serial && millis() - t0 < 3000;) delay(10);
