@@ -12,6 +12,10 @@ The goal is a legal, non-invasive way to catch a clogging DPF early and keep reg
 the opposite of DPF/EGR "delete" tuning, which is illegal for road use and harmful. Not a diagnostic tool;
 do not base safety or repair decisions on it. Only the ix35 is verified (see [docs/pids.md](docs/pids.md)).
 
+**No board?** The [Android app](android/README.md) does the same job from your phone: it talks to the same
+BLE adapter, writes the same logs, sends the same Telegram alerts, and shows soot and the next regen on
+**Android Auto**.
+
 ## Supported hardware
 
 | Role | Part | Env |
@@ -65,6 +69,7 @@ one-time offset with no reflash needed: [docs/odometer-offset.md](docs/odometer-
 src/            firmware (obd/ logging/ dpf/ web/ report/ + cyd-only board/ input/ audio/ ui/)
 include/        secrets.example.h  (copy to secrets.h, gitignored)
 test/           native unit tests built from real captured replies:  pio test -e native
+android/        phone + Android Auto app (Kotlin): same PIDs, logs and alerts, no board needed
 tools/          log helpers (date back-fill, fetch logs over Wi-Fi), other-car discovery + Car Scanner solver, export, fonts
 docs/           hardware, wiring, log format, PIDs, development, known issues
 logs/examples/  a real driving session
