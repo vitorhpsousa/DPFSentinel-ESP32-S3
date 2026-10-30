@@ -45,9 +45,8 @@
             android:foregroundServiceType="connectedDevice" />
 
         <!-- Android Auto. A DPF monitor fits none of the Play Store car categories, so this is for
-             sideloading: enable "Unknown sources" in Android Auto's developer settings.
-             POI rather than IOT: Android Auto hosts list POI apps on every version, while IOT
-             apps did not show up in the launcher on a Pixel 8. -->
+             sideloading. Android Auto 17.x lists it only when Google Play is the recorded installer
+             (KingInstaller, see android/README.md) and Unknown sources is on. -->
         <service
             android:name=".car.DpfCarAppService"
             android:exported="true">

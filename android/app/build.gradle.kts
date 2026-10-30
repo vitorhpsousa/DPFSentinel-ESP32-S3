@@ -12,15 +12,34 @@ android {
         applicationId = "io.github.vitorhpsousa.dpfsentinel"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
+    // One fixed key for every build, so a new APK installs as an update (keeping settings and logs)
+    // instead of failing on a signature mismatch: each CI runner otherwise makes a fresh debug key.
+    // CI writes it from the SIDELOAD_KEYSTORE_B64 secret; the key is never committed. Without it
+    // (a local build) the usual debug key is used.
+    val sideloadStore = System.getenv("SIDELOAD_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (sideloadStore != null) {
+            create("sideload") {
+                storeFile = sideloadStore
+                storePassword = System.getenv("SIDELOAD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SIDELOAD_KEY_ALIAS") ?: "dpfsentinel"
+                keyPassword = System.getenv("SIDELOAD_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+    val signing = signingConfigs.findByName("sideload") ?: signingConfigs.getByName("debug")
+
     buildTypes {
+        debug {
+            signingConfig = signing
+        }
         release {
             isMinifyEnabled = false
-            // Sideloaded personal build: signed with the debug key so the release APK installs too.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signing
         }
     }
     compileOptions {
