@@ -16,7 +16,8 @@ Every push that touches `android/` builds it on GitHub Actions:
 
 1. Open the repo's **Actions** tab → **Android app** → the latest green run.
 2. Download the **dpf-sentinel-apk** artifact (a zip) and unzip it.
-3. Copy `app-debug.apk` to the phone and open it. Android asks to allow installs from that app (Files/Chrome) once.
+3. Copy `DPF-Sentinel-<version>.apk` to the phone and open it (Android asks once to allow installs from
+   Files/Chrome). For the Android Auto screen, install it with KingInstaller instead: see below.
 
 Or build it yourself with Android Studio (open the `android/` folder), or from a terminal with the Android SDK:
 
@@ -37,14 +38,27 @@ Logging keeps going with the screen off (a foreground service with a notificatio
 
 ## Android Auto
 
-A DPF monitor doesn't fit any of the app categories Google allows on the Play Store for cars, so this
-works as a **sideloaded** app:
+A DPF monitor doesn't fit any of the app categories Google allows on the Play Store for cars, and current
+Android Auto versions (17.x) don't show a sideloaded Car App Library app even with *Unknown sources* on:
+they only list it when Android records Google Play as its installer. The working route is
+[KingInstaller](https://github.com/fcaronte/KingInstaller), which installs an APK with that installer
+record. It is a third-party tool, the author reports it working in most but not all cases, and a future
+Android Auto update could stop it.
 
-1. Phone: Settings → Apps → Android Auto → *Additional settings in the app* (or open Android Auto).
-2. Scroll to **Version** and tap it ~10 times until developer mode is enabled.
-3. ⋮ menu → **Developer settings** → tick **Unknown sources**.
-4. Connect to the car. DPF Sentinel appears in the app launcher on the car screen (customise the
-   launcher in Android Auto's settings if it's hidden).
+1. Uninstall DPF Sentinel if a version from before 1.2 is installed (those were signed with one-off keys).
+2. Install KingInstaller from its [releases page](https://github.com/fcaronte/KingInstaller/releases).
+3. In KingInstaller pick `DPF-Sentinel-<version>.apk` and install with the default (Classic) method.
+4. Check its *App Diagnostic Checker*: "Installed by" must say Google Play Store. If it doesn't, set up
+   [Shizuku](https://github.com/RikkaApps/Shizuku) (wireless debugging, no root needed on a Pixel), turn on
+   KingInstaller's *Shizuku Trick* switch and install again.
+5. Android Auto: tap *Version* ~10 times to enable developer mode, then ⋮ → **Developer settings** →
+   tick **Unknown sources**. Force-stop Android Auto and reconnect to the car.
+6. DPF Sentinel shows in Android Auto → *Customize launcher* and on the car's app grid.
+
+Install updates through KingInstaller the same way, so the Play Store installer record is kept.
+With the `SIDELOAD_KEYSTORE_B64` and `SIDELOAD_KEYSTORE_PASSWORD` repository secrets set (a base64 PKCS12
+keystore with alias `dpfsentinel`), every CI build is signed with that same key, so updates install over the
+old version and keep settings and logs. The key is never committed.
 
 The car screen shows soot (with a green / amber / red dot and the word OK / rising / HIGH), the
 next-regen estimate or **REGENERATING · N min**, EGT and DPF pressure, miles since the last regen,

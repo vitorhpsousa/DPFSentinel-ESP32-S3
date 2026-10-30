@@ -151,7 +151,7 @@ fun SettingsTab(s: Snapshot) {
             Switch(autoCar, { autoCar = it; prefs.autoStartWithCar = it })
         }
         Text(
-            "Sideloaded apps only show in the car after enabling Android Auto's developer mode and \"Unknown sources\". See android/README.md.",
+            "Android Auto only lists this app when it is installed with KingInstaller (Google Play as installer) and Unknown sources is on. See android/README.md.",
             color = Muted, fontSize = 12.sp,
         )
 

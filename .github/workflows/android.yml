@@ -22,14 +22,30 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Core tests (decoding, regen, health, CSV)
         run: ./gradlew -p core test --console=plain
+      - name: Signing key (from the SIDELOAD_KEYSTORE_B64 secret)
+        env:
+          KEYSTORE_B64: ${{ secrets.SIDELOAD_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sideload.keystore"
+            echo "SIDELOAD_KEYSTORE=$RUNNER_TEMP/sideload.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::SIDELOAD_KEYSTORE_B64 secret not set: this APK has a one-off key and won't install over another build"
+          fi
       - name: Build APK
+        env:
+          SIDELOAD_KEYSTORE_PASSWORD: ${{ secrets.SIDELOAD_KEYSTORE_PASSWORD }}
         run: ./gradlew :app:assembleDebug --console=plain
       - name: Show what Android Auto sees (merged manifest)
         run: |
           AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
           "$AAPT2" dump xmltree --file AndroidManifest.xml app/build/outputs/apk/debug/app-debug.apk \
-            | grep -E 'E: (service|meta-data|action|category|intent-filter|uses-sdk|application)|A: android:(name|value|resource|exported|minSdkVersion|targetSdkVersion|debuggable)' \
-            | grep -v -E 'permission'
+            | grep -E 'E: (service|meta-data|action|category|intent-filter|application)|A: .*android:(name|value|resource|versionName|debuggable)\(' \
+            | grep -v -E 'permission|androidx\.(startup|profileinstaller|emoji2|lifecycle)'
+      - name: Name the APK after its version
+        run: |
+          v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/DPF-Sentinel-$v.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: dpf-sentinel-apk

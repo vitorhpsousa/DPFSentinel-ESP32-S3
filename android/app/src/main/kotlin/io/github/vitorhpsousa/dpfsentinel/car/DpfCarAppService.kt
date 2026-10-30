@@ -8,8 +8,8 @@ import androidx.car.app.Session
 import androidx.car.app.validation.HostValidator
 import io.github.vitorhpsousa.dpfsentinel.Prefs
 
-// Entry point Android Auto binds to. Sideloaded builds only: enable Android Auto's developer
-// settings and "Unknown sources" (see android/README.md).
+// Entry point Android Auto binds to. Android Auto only lists it when Google Play is the recorded
+// installer (KingInstaller) and Unknown sources is on: see android/README.md.
 class DpfCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator =
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
