@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-files-path name="obd" path="obd/" />
+    <files-path name="obd_internal" path="obd/" />
+</paths>
