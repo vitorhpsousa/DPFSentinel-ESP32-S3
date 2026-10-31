@@ -22,7 +22,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Core tests (decoding, regen, health, CSV)
         run: ./gradlew -p core test --console=plain
-      - name: Signing key (from the SIDELOAD_KEYSTORE_B64 secret)
+      - name: Signing / Play upload key (from the SIDELOAD_KEYSTORE_B64 secret)
         env:
           KEYSTORE_B64: ${{ secrets.SIDELOAD_KEYSTORE_B64 }}
         run: |
@@ -30,7 +30,7 @@ jobs:
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sideload.keystore"
             echo "SIDELOAD_KEYSTORE=$RUNNER_TEMP/sideload.keystore" >> "$GITHUB_ENV"
           else
-            echo "::warning::SIDELOAD_KEYSTORE_B64 secret not set: this APK has a one-off key and won't install over another build"
+            echo "::warning::SIDELOAD_KEYSTORE_B64 secret not set: no Play bundle, and this APK has a one-off key that won't install over another build"
           fi
       - name: Build APK
         env:
@@ -50,4 +50,19 @@ jobs:
         with:
           name: dpf-sentinel-apk
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      # The file to upload to Google Play (release, not debuggable, signed with the upload key).
+      - name: Build Play bundle
+        if: env.SIDELOAD_KEYSTORE != ''
+        env:
+          SIDELOAD_KEYSTORE_PASSWORD: ${{ secrets.SIDELOAD_KEYSTORE_PASSWORD }}
+        run: |
+          ./gradlew :app:bundleRelease --console=plain
+          v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mv app/build/outputs/bundle/release/app-release.aab "app/build/outputs/bundle/release/DPF-Sentinel-$v.aab"
+      - uses: actions/upload-artifact@v4
+        if: env.SIDELOAD_KEYSTORE != ''
+        with:
+          name: dpf-sentinel-play-bundle
+          path: android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
