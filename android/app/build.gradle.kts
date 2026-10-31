@@ -6,20 +6,20 @@ plugins {
 
 android {
     namespace = "io.github.vitorhpsousa.dpfsentinel"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.vitorhpsousa.dpfsentinel"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 3
         versionName = "1.2"
     }
 
-    // One fixed key for every build, so a new APK installs as an update (keeping settings and logs)
-    // instead of failing on a signature mismatch: each CI runner otherwise makes a fresh debug key.
-    // CI writes it from the SIDELOAD_KEYSTORE_B64 secret; the key is never committed. Without it
-    // (a local build) the usual debug key is used.
+    // One fixed key for every build: the Google Play upload key, and the key sideloaded APKs are signed
+    // with so a new one installs as an update instead of failing on a signature mismatch (each CI
+    // runner otherwise makes a fresh debug key). CI writes it from the SIDELOAD_KEYSTORE_B64 secret;
+    // the key is never committed. Without it (a local build) the usual debug key is used.
     val sideloadStore = System.getenv("SIDELOAD_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
     signingConfigs {
         if (sideloadStore != null) {
