@@ -9,7 +9,9 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.vitorhpsousa.dpfsentinel"
+        // The Play Store / installed package name, registered in Play Console. It can never change
+        // once uploaded. The Kotlin package (namespace) is separate and only used inside the code.
+        applicationId = "com.dpfsentinel"
         minSdk = 26
         targetSdk = 36
         versionCode = 3
