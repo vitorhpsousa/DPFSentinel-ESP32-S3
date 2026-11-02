@@ -85,7 +85,7 @@ Still-running pings every 30 s during a regen go to the screens only, not to Tel
 ## Logs
 
 *Logs* lists the files; **Share** sends one to Drive, email, Telegram, etc. They also sit in
-`Android/data/io.github.vitorhpsousa.dpfsentinel/files/obd` (visible over USB). The format is the
+`Android/data/com.dpfsentinel/files/obd` (visible over USB). The format is the
 firmware's ([docs/log-format.md](../docs/log-format.md)); `unix_time` is always filled because the phone
 knows the time, and `millis` counts from the start of the session.
 

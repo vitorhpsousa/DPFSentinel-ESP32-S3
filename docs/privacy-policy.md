@@ -1,7 +1,7 @@
 # DPF Sentinel for Android: privacy policy
 
 DPF Sentinel is a read-only OBD-II logger for a diesel particulate filter. This policy covers the
-Android app (`io.github.vitorhpsousa.dpfsentinel`).
+Android app (`com.dpfsentinel`).
 
 **What the app reads.** Engine and exhaust values (soot level, pressures, temperatures, speed, mileage
 and similar) from a Bluetooth ELM327 adapter plugged into your own car.
