@@ -82,6 +82,13 @@ explains how to get both), **Save**, then **Send test**. You then get:
 
 Still-running pings every 30 s during a regen go to the screens only, not to Telegram.
 
+## Units
+
+*Settings → Units*: **UK** (mph, miles, °C, the default), **Metric** (km/h, km, °C) or **US** (mph, miles, °F).
+It changes the screens, the car screen, notifications and Telegram messages. The log files always keep the
+car's own units (speed in km/h, distances in miles, temperatures in °C), so they stay comparable with the
+firmware's logs and tools.
+
 ## Logs
 
 *Logs* lists the files; **Share** sends one to Drive, email, Telegram, etc. They also sit in

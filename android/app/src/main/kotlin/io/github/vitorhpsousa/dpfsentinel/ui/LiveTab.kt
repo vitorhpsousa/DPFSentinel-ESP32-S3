@@ -49,6 +49,8 @@ fun zoneColor(z: Int) = when (z) { 2 -> Red; 1 -> Amber; else -> Green }
 fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
     val ctx = LocalContext.current
     val r = s.row
+    val u = Prefs(ctx).units
+    val nan = Double.NaN
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -61,7 +63,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
 
         if (s.regenActive) {
             val mins = if (s.regenStartedAtMs > 0) (SystemClock.elapsedRealtime() - s.regenStartedAtMs) / 60000 else 0
-            Banner("REGENERATING · $mins min · EGT ${fmt(r?.egt ?: Double.NaN, 0)} °C", "Keep driving steadily so it can finish.", Amber)
+            Banner("REGENERATING · $mins min · EGT ${u.temp(r?.egt ?: nan)}", "Keep driving steadily so it can finish.", Amber)
         }
         if (s.idleBlockage) Banner("DPF pressure high at idle", "A possible blockage sign (threshold unverified).", Red)
 
@@ -79,7 +81,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
                 Text(
                     buildString {
                         if (!s.triggerG.isNaN()) append("regen trigger ~${fmt(s.triggerG, 1)} g")
-                        if (!s.rateGPerMi.isNaN()) append(" · ${fmt(s.rateGPerMi, 3)} g/mi")
+                        if (!s.rateGPerMi.isNaN()) append(" · ${u.sootRate(s.rateGPerMi)}")
                         if (s.estNotSoon) append(" · estimate shows from 12 g")
                     },
                     color = Muted, fontSize = 12.sp,
@@ -95,15 +97,15 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
         val offset = Prefs(ctx).odometerOffsetMi
         val tiles = listOf(
             "RPM" to fmt(r?.rpm ?: Double.NaN, 0),
-            "Speed" to fmt(r?.speed ?: Double.NaN, 0) + " km/h",
-            "Coolant" to fmt(r?.coolant ?: Double.NaN, 0) + " °C",
+            "Speed" to u.speed(r?.speed ?: nan),
+            "Coolant" to u.temp(r?.coolant ?: nan),
             "DPF ΔP" to fmt(r?.diffPressure ?: Double.NaN, 1) + " hPa",
-            "EGT before DPF" to fmt(r?.egt ?: Double.NaN, 0) + " °C",
-            "Cat temp" to fmt(r?.catTemp ?: Double.NaN, 0) + " °C",
-            "Since regen" to fmt(r?.sinceRegen ?: Double.NaN, 1) + " mi",
-            "Odometer" to fmt((r?.odometer ?: Double.NaN) + offset, 0) + " mi",
+            "EGT before DPF" to u.temp(r?.egt ?: nan),
+            "Cat temp" to u.temp(r?.catTemp ?: nan),
+            "Since regen" to u.distance(r?.sinceRegen ?: nan, 1),
+            "Odometer" to u.distance((r?.odometer ?: nan) + offset),
             "Battery" to fmt(r?.batteryV ?: Double.NaN, 1) + " V",
-            "Intercooler" to fmt(r?.intercooler ?: Double.NaN, 0) + " °C",
+            "Intercooler" to u.temp(r?.intercooler ?: nan),
             "MAF" to fmt(r?.maf ?: Double.NaN, 1) + " g/s",
             "Load" to fmt(r?.get("engine_load_pct") ?: Double.NaN, 0) + " %",
         )
@@ -117,9 +119,9 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF15181C))) {
             Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Health", fontWeight = FontWeight.Bold)
-                Text("Regens today ${h.regensToday} · this week ${h.regensThisWeek} · avg interval ${fmt(h.avgIntervalMi, 0)} mi")
-                Text("Regens since oil change: ${h.regensSinceOil}" + if (h.oilChangeOdoMi > 0) " (reference ${fmt(h.oilChangeOdoMi + offset, 0)} mi)" else "")
-                Text("Warm-up to 80 °C: last ${fmt(h.lastWarmupMin, 1)} min · usual ${fmt(h.warmupMedianMin, 1)} min")
+                Text("Regens today ${h.regensToday} · this week ${h.regensThisWeek} · avg interval ${u.distance(h.avgIntervalMi)}")
+                Text("Regens since oil change: ${h.regensSinceOil}" + if (h.oilChangeOdoMi > 0) " (reference ${u.distance(h.oilChangeOdoMi + offset)})" else "")
+                Text("Warm-up to ${u.temp(80.0)}: last ${fmt(h.lastWarmupMin, 1)} min · usual ${fmt(h.warmupMedianMin, 1)} min")
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(
                     enabled = s.running && !(r?.odometer ?: Double.NaN).isNaN(),

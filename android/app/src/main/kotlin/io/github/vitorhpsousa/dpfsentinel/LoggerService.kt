@@ -87,7 +87,7 @@ class LoggerService : Service() {
         fun unix() = System.currentTimeMillis() / 1000.0
 
         val poller = ObdPoller(elm) { h, r, reply -> session.raw(ms(), h, r, reply) }
-        val watch = RegenWatch()
+        val watch = RegenWatch(units = { prefs.units })
         val health = HealthTracker(HealthState.decode(prefs.health))
         val zone = SootZone()
         val history = ArrayDeque<HistoryPoint>()
@@ -115,7 +115,7 @@ class LoggerService : Service() {
                     stale = !elm.connected() || row == null || !row.anyPid(),
                     regenActive = watch.active || (row?.regenActive ?: false),
                     regenStartedAtMs = if (watch.active) t0 + watch.startedAtMs else 0,
-                    estimate = Messages.estimate(h),
+                    estimate = Messages.estimate(h, prefs.units),
                     estMiles = h.estMilesToRegen,
                     estNotSoon = h.estNotSoon,
                     estFromLiveRate = h.estFromLiveRate,
@@ -211,13 +211,14 @@ class LoggerService : Service() {
                 if (oilChangeRequested.getAndSet(false) && !row.odometer.isNaN()) health.oilChangeNow(row.odometer)
                 health.update(row, ev, now, wall)
                 for (a in health.takeAlerts()) {
-                    alert("DPF Sentinel health", a.text, NOTIF_HEALTH + a.ordinal)
-                    telegram.event(a.text)
+                    val text = a.text(prefs.units)
+                    alert("DPF Sentinel health", text, NOTIF_HEALTH + a.ordinal)
+                    telegram.event(text)
                 }
                 if (health.dirty) { prefs.health = health.state.encode(); health.dirty = false }
 
                 zone.update(row.soot)?.let { z ->
-                    val text = if (z == 2) "Soot ${"%.1f".format(row.soot)} g: at this car's regen level. A steady 20+ min drive at 50+ mph helps it finish."
+                    val text = if (z == 2) "Soot ${"%.1f".format(row.soot)} g: at this car's regen level. A steady 20+ min drive at ${prefs.units.speed(80.0)}+ helps it finish."
                     else "Soot ${"%.1f".format(row.soot)} g: rising towards a regeneration."
                     alert(if (z == 2) "Soot high" else "Soot rising", text, NOTIF_SOOT)
                 }
@@ -241,16 +242,17 @@ class LoggerService : Service() {
                 if (now - lastTelegram >= 15_000) {
                     lastTelegram = now
                     val snapRow = row
-                    val est = Messages.estimate(health.state)
+                    val u = prefs.units
+                    val est = Messages.estimate(health.state, u)
                     telegram.tick(
-                        statusText = { Messages.status(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), snapRow, est) },
-                        latestLine = Messages.latestLine(snapRow),
+                        statusText = { Messages.status(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), snapRow, est, u) },
+                        latestLine = Messages.latestLine(snapRow, u),
                         currentSession = session.number,
                     )
                 }
                 if (now - lastNotif >= 5000) {
                     lastNotif = now
-                    updateLiveNotification(row, Messages.estimate(health.state))
+                    updateLiveNotification(row, Messages.estimate(health.state, prefs.units))
                 }
             }
         } catch (e: InterruptedException) {

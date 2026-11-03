@@ -89,10 +89,17 @@ class HealthState {
     }
 }
 
-enum class HealthAlert(val text: String) {
-    FAST_REGENS("Health: 3 regens in a row under 100 mi apart -- oil dilution or a stuck EGR/DPF sensor is worth checking"),
-    OIL_REMINDER("Health: 15 regens since the last oil-change reference -- check the dipstick (tap 'Oil changed' once it's done)"),
-    SLOW_WARMUP("Health: warm-up to 80C took well over the usual time -- possible stuck-open thermostat"),
+enum class HealthAlert {
+    FAST_REGENS,
+    OIL_REMINDER,
+    SLOW_WARMUP;
+
+    fun text(u: Units = Units.UK): String = when (this) {
+        FAST_REGENS -> "Health: 3 regens in a row under ${u.distance(HealthTracker.FAST_REGEN_THRESHOLD_MI)} apart -- " +
+            "oil dilution or a stuck EGR/DPF sensor is worth checking"
+        OIL_REMINDER -> "Health: 15 regens since the last oil-change reference -- check the dipstick (tap 'Oil changed' once it's done)"
+        SLOW_WARMUP -> "Health: warm-up to ${u.temp(HealthTracker.WARMUP_DONE_C)} took well over the usual time -- possible stuck-open thermostat"
+    }
 }
 
 class HealthTracker(val state: HealthState = HealthState(), private val zone: ZoneId = ZoneId.systemDefault()) {
