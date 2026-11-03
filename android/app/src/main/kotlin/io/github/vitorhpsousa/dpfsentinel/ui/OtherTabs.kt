@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -17,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +42,7 @@ import io.github.vitorhpsousa.dpfsentinel.Prefs
 import io.github.vitorhpsousa.dpfsentinel.SessionFiles
 import io.github.vitorhpsousa.dpfsentinel.Snapshot
 import io.github.vitorhpsousa.dpfsentinel.core.Messages
+import io.github.vitorhpsousa.dpfsentinel.core.Units
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -108,11 +111,28 @@ fun SettingsTab(s: Snapshot) {
     var dash by remember { mutableStateOf("") }
     var autoCar by remember { mutableStateOf(prefs.autoStartWithCar) }
     var adapter by remember { mutableStateOf(prefs.adapterName.ifEmpty { prefs.adapterAddress }) }
+    var units by remember { mutableStateOf(prefs.units) }
 
     fun toast(t: String) = Toast.makeText(ctx, t, Toast.LENGTH_LONG).show()
     fun onMain(f: () -> Unit) = android.os.Handler(android.os.Looper.getMainLooper()).post(f)
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Units", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Units.entries.forEach { option ->
+            Row(
+                Modifier.fillMaxWidth().selectable(selected = units == option, onClick = { units = option; prefs.units = option }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = units == option, onClick = { units = option; prefs.units = option })
+                Text(option.label)
+            }
+        }
+        Text(
+            "For the screens, the car, notifications and Telegram. Log files keep the car's own units (speed in km/h, distance in miles, °C).",
+            color = Muted, fontSize = 12.sp,
+        )
+
+        HorizontalDivider()
         Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text(
             "Regen start/finish and health alerts, a daily report with the new logs, and /status replies. " +
@@ -139,7 +159,7 @@ fun SettingsTab(s: Snapshot) {
             }) { Text("Save") }
             OutlinedButton(onClick = { telegram.test { r -> onMain { tgResult = r } } }) { Text("Send test") }
             OutlinedButton(onClick = {
-                telegram.sendReportNow(Messages.latestLine(s.row), if (s.running) s.session else -1) { r -> onMain { tgResult = r } }
+                telegram.sendReportNow(Messages.latestLine(s.row, units), if (s.running) s.session else -1) { r -> onMain { tgResult = r } }
             }) { Text("Report now") }
         }
         Text("Last result: $tgResult", color = Muted, fontSize = 12.sp)
@@ -170,17 +190,19 @@ fun SettingsTab(s: Snapshot) {
         val ecu = s.row?.odometer ?: Double.NaN
         Text(
             "The dash and the ECU often count separately. With the engine running, type the dash mileage once; " +
-                "the offset is used for display only, never written to the logs. Current offset: ${fmt(prefs.odometerOffsetMi.toDouble(), 1)} mi.",
+                "the offset is used for display only, never written to the logs. Current offset: ${units.distance(prefs.odometerOffsetMi.toDouble(), 1)}.",
             color = Muted, fontSize = 12.sp,
         )
-        OutlinedTextField(dash, { dash = it }, label = { Text("Dash mileage now (mi)") }, singleLine = true,
+        OutlinedTextField(dash, { dash = it }, label = { Text("Dash reading now (${units.distanceUnit})") }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !ecu.isNaN(), onClick = {
                 val d = dash.replace(',', '.').toDoubleOrNull()
                 if (d == null) toast("Enter a number") else {
-                    prefs.odometerOffsetMi = (d - ecu).toFloat()
-                    toast("Offset set to ${fmt(d - ecu, 1)} mi")
+                    // The offset is kept in miles, the ECU's unit; the dash is read in the chosen units.
+                    val dashMi = if (units == Units.METRIC) d / Units.KM_PER_MI else d
+                    prefs.odometerOffsetMi = (dashMi - ecu).toFloat()
+                    toast("Offset set to ${units.distance(dashMi - ecu, 1)}")
                 }
             }) { Text(if (ecu.isNaN()) "Needs a live reading" else "Set offset") }
             OutlinedButton(onClick = { prefs.odometerOffsetMi = 0f; toast("Offset cleared") }) { Text("Clear") }

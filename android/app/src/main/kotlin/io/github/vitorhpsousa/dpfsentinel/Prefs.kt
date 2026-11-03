@@ -2,6 +2,7 @@ package io.github.vitorhpsousa.dpfsentinel
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.vitorhpsousa.dpfsentinel.core.Units
 
 // Settings and small persistent counters (the phone's equivalent of the firmware's NVS keys).
 class Prefs(context: Context) {
@@ -50,6 +51,11 @@ class Prefs(context: Context) {
     var odometerOffsetMi: Float
         get() = p.getFloat("odoOff", 0f)
         set(v) = p.edit().putFloat("odoOff", v).apply()
+
+    /** How speed, distance and temperature are shown (never changes the logs). */
+    var units: Units
+        get() = Units.fromName(p.getString("units", null))
+        set(v) = p.edit().putString("units", v.name).apply()
 
     /** Start logging when Android Auto opens the app. */
     var autoStartWithCar: Boolean

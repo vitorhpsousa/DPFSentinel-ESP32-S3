@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.vitorhpsousa.dpfsentinel.LiveState
 import io.github.vitorhpsousa.dpfsentinel.LoggerService
+import io.github.vitorhpsousa.dpfsentinel.Prefs
 import io.github.vitorhpsousa.dpfsentinel.R
 import io.github.vitorhpsousa.dpfsentinel.Snapshot
 import kotlinx.coroutines.delay
@@ -77,6 +78,7 @@ class LiveScreen(carContext: CarContext) : Screen(carContext) {
     /** (title, text) per row, most important first. */
     private fun rows(s: Snapshot): List<Pair<String, String>> {
         val r = s.row
+        val u = Prefs(carContext).units
         val soot = r?.soot ?: Double.NaN
         val zoneWord = when (s.sootZone) { 2 -> "HIGH"; 1 -> "rising"; else -> "OK" }
         val out = ArrayList<Pair<String, String>>()
@@ -91,8 +93,8 @@ class LiveScreen(carContext: CarContext) : Screen(carContext) {
             out += Pair("Next regen: ${s.estimate}", if (s.estNotSoon) "Estimate shows from 12 g of soot" else if (s.estFromLiveRate) "From this cycle's soot rate" else "")
         }
         out += Pair(
-            "EGT ${n(r?.egt ?: Double.NaN, 0)} °C · DPF ΔP ${n(r?.diffPressure ?: Double.NaN, 0)} hPa",
-            "${n(r?.sinceRegen ?: Double.NaN, 0)} mi since the last regen",
+            "EGT ${u.temp(r?.egt ?: Double.NaN)} · DPF ΔP ${n(r?.diffPressure ?: Double.NaN, 0)} hPa",
+            "${u.distance(r?.sinceRegen ?: Double.NaN)} since the last regen",
         )
         out += Pair(if (s.running) s.status else "Not logging", if (s.running && s.idleBlockage) "High DPF pressure at idle" else "")
         return out

@@ -15,7 +15,8 @@ class RegenEvent(val type: Type, val text: String = "") {
     }
 }
 
-class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault()) {
+// units: read on every message, so a change in the settings applies to the next one.
+class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val units: () -> Units = { Units.UK }) {
     private var inRegen = false
     private var activeStreak = 0
     private var inactiveStreak = 0
@@ -45,7 +46,7 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault()) {
         // Data resumed after a long gap while a regen was open: engine stopped or the link dropped.
         if (inRegen && nowMs - lastValidMs > GAP_MS) {
             val text = "DPF regeneration was interrupted (engine stopped or signal lost)\n" +
-                "ran about ${(lastValidMs - startMs) / 60000} min, peak EGT ${fmt(peakEgt, 0)} C" + clock(startWall)
+                "ran about ${(lastValidMs - startMs) / 60000} min, peak EGT ${units().temp(peakEgt)}" + clock(startWall)
             inRegen = false
             activeStreak = 0
             inactiveStreak = 0
@@ -66,13 +67,13 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault()) {
             sootStart = if (sootG.isNaN()) lastSoot else sootG
             val distStart = if (distMi.isNaN()) 0.0 else distMi
             startWall = wallClock
-            val text = "DPF regeneration started\nsoot ${fmt(sootStart, 1)} g, ${fmt(distStart, 1)} mi since the last regen, " +
-                "EGT ${fmt(if (egtC.isNaN()) 0.0 else egtC, 0)} C" + pressure(pressureHpa) + clock(startWall)
+            val text = "DPF regeneration started\nsoot ${fmt(sootStart, 1)} g, ${units().distance(distStart, 1)} since the last regen, " +
+                "EGT ${units().temp(if (egtC.isNaN()) 0.0 else egtC)}" + pressure(pressureHpa) + clock(startWall)
             return RegenEvent(RegenEvent.Type.START, text)
         }
         if (inRegen && inactiveStreak >= STREAK_ROWS) {
             inRegen = false
-            val text = "DPF regeneration finished\ntook about ${(nowMs - startMs) / 60000} min, peak EGT ${fmt(peakEgt, 0)} C\n" +
+            val text = "DPF regeneration finished\ntook about ${(nowMs - startMs) / 60000} min, peak EGT ${units().temp(peakEgt)}\n" +
                 "soot ${fmt(sootStart, 1)} g -> ${fmt(if (sootG.isNaN()) lastSoot else sootG, 1)} g" + clock(wallClock)
             return RegenEvent(RegenEvent.Type.END, text)
         }
@@ -81,7 +82,7 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault()) {
             val mins = (nowMs - startMs) / 60000
             val secs = ((nowMs - startMs) / 1000) % 60
             val text = "DPF regen still running -- $mins:${secs.toString().padStart(2, '0')} so far\n" +
-                "EGT ${fmt(if (egtC.isNaN()) 0.0 else egtC, 0)} C, soot ${fmt(if (sootG.isNaN()) lastSoot else sootG, 1)} g" +
+                "EGT ${units().temp(if (egtC.isNaN()) 0.0 else egtC)}, soot ${fmt(if (sootG.isNaN()) lastSoot else sootG, 1)} g" +
                 pressure(pressureHpa) + clock(wallClock)
             return RegenEvent(RegenEvent.Type.TICK, text)
         }
