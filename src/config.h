@@ -68,8 +68,13 @@
 // A DS3231 on I2C (addr 0x68) is used automatically if present (see docs/wiring.md).
 #define NTP_ENABLED 1
 #define RTC_DS3231_ENABLED 1
-#define RTC_SDA_PIN -1          // -1 = board default (CYD: shares the touch bus 38/39); Freenove: set e.g. 47
+#ifdef BOARD_FREENOVE
+#define RTC_SDA_PIN 41          // header pins 41/42 (48 is the on-board RGB LED, 38-40 the SD card)
+#define RTC_SCL_PIN 42
+#else
+#define RTC_SDA_PIN -1          // -1 = board default (CYD: shares the touch bus 38/39)
 #define RTC_SCL_PIN -1
+#endif
 // POSIX time-zone rule for local time (UK default; DST automatic). Stored log times are always UTC.
 #define TZ_RULE "GMT0BST,M3.5.0/1,M10.5.0"
 

@@ -64,7 +64,7 @@ Optional extras (none are needed to get going):
 
 | Extra | What for | Guide |
 |---|---|---|
-| DS3231 real-time clock module, plus 4 female-to-female jumper wires | Correct time from the first second, even with no WiFi. Wired to 3V3, GND, GPIO 47 (SDA), GPIO 48 (SCL). | [wiring.md](wiring.md) |
+| DS3231 real-time clock module, plus 4 female-to-female jumper wires | Correct time from the first second, even with no WiFi. Wired to 3V3, GND, GPIO 41 (SDA), GPIO 42 (SCL). | [wiring.md](wiring.md) |
 | 2 LEDs, 2 resistors (220 to 330 ohm), jumper wires | A "regen running" light and a "hot exhaust" light on GPIO 1 and GPIO 2. | [Stage 11](#11-mounting-and-power-in-the-car) |
 | A small plastic box | The board comes bare. See [Stage 11](#11-mounting-and-power-in-the-car). |
 
@@ -535,7 +535,7 @@ The board has no battery clock of its own. It gets the time from, in order:
 
 | Source | When | Log marker |
 |---|---|---|
-| **DS3231 RTC** (optional) | Immediately at power-up, if fitted ([wiring.md](wiring.md); on this board set `RTC_SDA_PIN 47` and `RTC_SCL_PIN 48` in `src/config.h`, `RTC_DS3231_ENABLED` is already 1) | `rtc` |
+| **DS3231 RTC** (optional) | Immediately at power-up, if fitted ([wiring.md](wiring.md); on this board the pins are GPIO 41 (SDA) and 42 (SCL), already set in `src/config.h`) | `rtc` |
 | **NTP** (internet time) | As soon as it joins your hotspot or home WiFi | `ntp` |
 | **Your phone** | When you open http://192.168.4.1 while joined to `DPF-Sentinel`. The page sends your phone's time automatically; nothing to press. It is ignored if NTP already set the clock. | `phone` |
 
