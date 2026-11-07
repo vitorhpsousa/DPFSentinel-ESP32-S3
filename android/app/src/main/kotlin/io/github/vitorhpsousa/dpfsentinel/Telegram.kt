@@ -94,13 +94,17 @@ class Telegram(context: Context) {
         var sent = prefs.tgLastSentSession
         // First report (Telegram just switched on): start from now rather than upload every old log.
         if (sent == 0 && currentSession > 1) { sent = currentSession - 1; prefs.tgLastSentSession = sent }
-        val all = SessionFiles.list(ctx).filter {
+        // Grouped by session (CSV first, then raw), so a session counts as sent only once all of its
+        // files went: a failed CSV after a good raw log is retried instead of skipped for good.
+        val sessions = SessionFiles.list(ctx).filter {
             val n = SessionFiles.numberOf(it)
             n > sent && n != currentSession && (force || it.length() >= MIN_BYTES)
-        }.sortedWith(compareBy<File> { SessionFiles.numberOf(it) }.thenBy { it.name })
-        // Only the newest files; older unsent ones are marked as handled, not queued.
-        val files = all.takeLast(MAX_FILES)
-        if (all.size > files.size) { sent = SessionFiles.numberOf(all[all.size - MAX_FILES - 1]); prefs.tgLastSentSession = sent }
+        }.groupBy { SessionFiles.numberOf(it) }.toSortedMap()
+        // Only the newest sessions; older unsent ones are marked as handled, not queued.
+        val keep = sessions.keys.toList().takeLast(MAX_SESSIONS)
+        if (sessions.size > keep.size) { sent = keep.first() - 1; prefs.tgLastSentSession = sent }
+        val groups = keep.map { n -> n to sessions.getValue(n).sortedBy { if (it.name.startsWith("session_")) 0 else 1 } }
+        val files = groups.flatMap { it.second }
 
         val date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEE dd MMM HH:mm", Locale.UK))
         if (files.isEmpty() && !force) {
@@ -112,17 +116,15 @@ class Telegram(context: Context) {
             lastResult = "message failed"
             return false
         }
-        var lastGood = sent
-        for (f in files) {
-            if (!sendDocument(f, "${f.name} (${Messages.fmtBytes(f.length())})")) {
-                prefs.tgLastSentSession = lastGood
-                lastResult = "failed on ${f.name}"
-                return false
+        for ((n, group) in groups) {
+            for (f in group) {
+                if (!sendDocument(f, "${f.name} (${Messages.fmtBytes(f.length())})")) {
+                    lastResult = "failed on ${f.name}"
+                    return false   // tgLastSentSession still points before session n: all of it is retried
+                }
             }
-            val n = SessionFiles.numberOf(f)
-            if (n > lastGood) lastGood = n
+            prefs.tgLastSentSession = n
         }
-        prefs.tgLastSentSession = lastGood
         prefs.tgLastReportDay = LocalDate.now().toEpochDay()
         lastResult = "sent ${files.size} file(s) at $date"
         return true
@@ -165,8 +167,15 @@ class Telegram(context: Context) {
         c.disconnect()
         if (ok && body.contains("\"ok\":true")) body else null
     } catch (e: Exception) {
-        Log.w(TAG, "$method failed: ${e.message}")
+        Log.w(TAG, "$method failed: ${scrub(e)}")
         null
+    }
+
+    // Some network exceptions quote the request URL, which contains the bot token.
+    private fun scrub(e: Exception): String {
+        val msg = e.message ?: ""
+        val token = prefs.tgToken
+        return e.javaClass.simpleName + ": " + if (token.isNotEmpty()) msg.replace(token, "<token>") else msg
     }
 
     private fun sendDocument(f: File, caption: String): Boolean = try {
@@ -192,14 +201,14 @@ class Telegram(context: Context) {
         c.disconnect()
         ok
     } catch (e: Exception) {
-        Log.w(TAG, "sendDocument failed: ${e.message}")
+        Log.w(TAG, "sendDocument failed: ${scrub(e)}")
         false
     }
 
     companion object {
         private const val TAG = "Telegram"
         private const val MAX_QUEUE = 10
-        private const val MAX_FILES = 10
+        private const val MAX_SESSIONS = 5   // CSV + raw each, so up to 10 files as before
         private const val MIN_BYTES = 3000L   // skip blank / no-adapter sessions
         private const val POLL_MS = 60_000L
     }

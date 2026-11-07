@@ -2,6 +2,7 @@ package io.github.vitorhpsousa.dpfsentinel
 
 import android.content.Context
 import io.github.vitorhpsousa.dpfsentinel.core.CsvFormat
+import io.github.vitorhpsousa.dpfsentinel.core.PhoneColumns
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
@@ -15,23 +16,28 @@ class SessionFiles(context: Context, val number: Int) {
     private val raw: BufferedWriter
     var rows = 0L
         private set
+    /** Set when a row couldn't be written (storage full, folder removed); shown on the Live tab. */
+    @Volatile var writeError: String = ""
+        private set
 
     init {
         dir.mkdirs()
         val csvFile = File(dir, "session_$number.csv")
         val fresh = !csvFile.exists() || csvFile.length() == 0L
         csv = BufferedWriter(FileWriter(csvFile, true))
-        if (fresh) csv.write(CsvFormat.HEADER + "\n")
+        // The firmware's columns first, then the phone's GPS/barometer ones (core/Motion.kt).
+        if (fresh) csv.write(PhoneColumns.HEADER + "\n")
         raw = BufferedWriter(FileWriter(File(dir, "raw_$number.log"), true))
         raw.write(CsvFormat.timeMarker(0, System.currentTimeMillis() / 1000) + "\n")
     }
 
-    fun writeRow(ms: Long, unixSec: Double, values: DoubleArray) {
+    fun writeRow(ms: Long, unixSec: Double, values: DoubleArray, extra: DoubleArray = PhoneColumns.empty()) {
         runCatching {
-            csv.write(CsvFormat.row(ms, unixSec, values) + "\n")
+            csv.write(CsvFormat.row(ms, unixSec, values) + PhoneColumns.format(extra) + "\n")
             csv.flush()
             rows++
-        }
+            writeError = ""
+        }.onFailure { writeError = it.message ?: it.javaClass.simpleName }
     }
 
     fun raw(ms: Long, header: String, request: String, reply: String) {
@@ -51,6 +57,9 @@ class SessionFiles(context: Context, val number: Int) {
         private val NUM = Regex("""^(session|raw)_(\d+)\.(csv|log)$""")
 
         fun numberOf(f: File): Int = NUM.find(f.name)?.groupValues?.get(2)?.toIntOrNull() ?: -1
+
+        fun highestNumber(context: Context): Int =
+            folder(context).listFiles()?.maxOfOrNull { numberOf(it) }?.coerceAtLeast(0) ?: 0
 
         /** Log files, newest session first. */
         fun list(context: Context): List<File> =

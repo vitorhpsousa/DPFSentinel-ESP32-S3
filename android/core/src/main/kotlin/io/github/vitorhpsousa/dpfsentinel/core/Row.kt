@@ -22,13 +22,5 @@ class Row(val values: DoubleArray = DoubleArray(Pids.COLUMNS.size) { Double.NaN 
     val regenActive get() = get("dpf_regen_active").let { !it.isNaN() && it != 0.0 }
 
     fun anyPid(): Boolean = (0 until Pids.TABLE.size).any { !values[it].isNaN() }
-
-    // Same as the firmware's isDpfIdleBlockageFlagged (threshold unverified, see docs).
-    fun idleBlockageFlagged(): Boolean =
-        !diffPressure.isNaN() && !rpm.isNaN() && rpm <= IDLE_RPM_CEILING && diffPressure >= IDLE_PRESSURE_THRESHOLD_HPA
-
-    companion object {
-        const val IDLE_PRESSURE_THRESHOLD_HPA = 20.0
-        const val IDLE_RPM_CEILING = 1100.0
-    }
+    // The idle-pressure check needs history (regen, warm-up, a held reading): see IdleBlockageWatch.
 }

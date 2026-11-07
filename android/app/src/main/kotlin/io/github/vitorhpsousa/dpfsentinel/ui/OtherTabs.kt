@@ -112,6 +112,7 @@ fun SettingsTab(s: Snapshot) {
     var autoCar by remember { mutableStateOf(prefs.autoStartWithCar) }
     var adapter by remember { mutableStateOf(prefs.adapterName.ifEmpty { prefs.adapterAddress }) }
     var units by remember { mutableStateOf(prefs.units) }
+    var logPos by remember { mutableStateOf(prefs.logPosition) }
 
     fun toast(t: String) = Toast.makeText(ctx, t, Toast.LENGTH_LONG).show()
     fun onMain(f: () -> Unit) = android.os.Handler(android.os.Looper.getMainLooper()).post(f)
@@ -129,6 +130,18 @@ fun SettingsTab(s: Snapshot) {
         }
         Text(
             "For the screens, the car, notifications and Telegram. Log files keep the car's own units (speed in km/h, distance in miles, °C).",
+            color = Muted, fontSize = 12.sp,
+        )
+
+        HorizontalDivider()
+        Text("GPS and altitude", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Log position (latitude/longitude)", Modifier.weight(1f))
+            Switch(logPos, { logPos = it; prefs.logPosition = it })
+        }
+        Text(
+            "GPS speed, altitude (barometer pinned to GPS) and road grade are added to each log row while location is allowed. " +
+                "With position on, logs show where you drove, and the daily Telegram report uploads them. Applies from the next row.",
             color = Muted, fontSize = 12.sp,
         )
 

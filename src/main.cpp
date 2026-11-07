@@ -36,6 +36,7 @@ static inline void audioJingle(int) {}
 
 static ElmClient elm;
 static RegenWatch regenWatch;
+static IdleBlockageWatch idleWatch;
 static SessionStore store;
 #if HAS_DISPLAY
 static PagesData pd;
@@ -81,7 +82,7 @@ static int8_t reqOf[PID_TABLE_LEN];
 // index -1, which would be undefined behaviour. Always NaN — assembleRow()
 // only ever writes indices < COLUMN_COUNT.
 static float values[COLUMN_COUNT + 1];
-static int colRpm, colSpeed, colLoad, colDp, colSoot, colEgt, colRegen, colCat, colOdo, colDist, colOdoRegen;
+static int colCoolant, colRpm, colSpeed, colLoad, colDp, colSoot, colEgt, colRegen, colCat, colOdo, colDist, colOdoRegen;
 static uint32_t bootNumber, lastRow = 0, blankRows = 0;
 
 static int colOf(const char *name) {
@@ -224,6 +225,7 @@ void setup() {
     odometerOffsetBegin();
 
     for (size_t i = 0; i <= COLUMN_COUNT; i++) values[i] = NAN;
+    colCoolant = colOf("coolant_temp");
     colRpm = colOf("engine_rpm"); colSpeed = colOf("vehicle_speed"); colLoad = colOf("engine_load_pct");
     colDp = colOf("dpf_diff_pressure_hpa"); colSoot = colOf("dpf_soot_level_g"); colEgt = colOf("egt_before_dpf_c");
     colRegen = colOf("dpf_regen_active"); colCat = colOf("dpf_zone_temp_c"); colOdo = colOf("odometer_mi");
@@ -493,10 +495,10 @@ void loop() {
         printRow();
 #if TG_ALERT_REGEN
         {
-            RegenEvent ev = regenWatch.update(now, unixNow(), values[colRegen], values[colEgt], values[colSoot], values[colDist], values[colDp]);
+            RegenEvent ev = regenWatch.update(now, unixNow(), values[colRegen], values[colEgt], values[colSoot], values[colDist], values[colDp], values[colSpeed]);
             if (ev.type != RegenEvent::NONE) {
                 Serial.printf("REGEN EVENT: %s\n", ev.text);
-                if (ev.type == RegenEvent::START) audioAlert(REGEN_START);
+                if (ev.type == RegenEvent::START || ev.type == RegenEvent::RESUMED) audioAlert(REGEN_START);
                 else if (ev.type == RegenEvent::END) audioAlert(REGEN_END);
                 reportEvent(ev.text);
             }
@@ -535,8 +537,13 @@ void loop() {
             elm.close();
         }
 
-        if (isDpfIdleBlockageFlagged(values[colDp], values[colRpm]))
-            Serial.println("*** DPF idle pressure elevated — possible blockage ***");
+        {
+            // Needs warm idle, no regen running/paused or in the last 10 min, 35 hPa held 60 s.
+            bool regenBusy = regenWatch.active() || (!isnan(values[colRegen]) && values[colRegen] > 0.5f);
+            bool wasFlagged = idleWatch.flagged();
+            if (idleWatch.update(now, values[colRpm], values[colSpeed], values[colDp], values[colCoolant], regenBusy) && !wasFlagged)
+                Serial.println("*** DPF idle pressure elevated — possible blockage ***");
+        }
 #if LED_REGEN_PIN >= 0
         digitalWrite(LED_REGEN_PIN, (!isnan(values[colRegen]) && values[colRegen] != 0.0f) ? HIGH : LOW);
         float hot = !isnan(values[colEgt]) ? values[colEgt] : values[colCat];

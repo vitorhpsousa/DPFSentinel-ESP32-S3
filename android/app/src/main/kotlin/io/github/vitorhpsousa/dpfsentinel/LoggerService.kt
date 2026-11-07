@@ -20,7 +20,10 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import io.github.vitorhpsousa.dpfsentinel.core.HealthState
 import io.github.vitorhpsousa.dpfsentinel.core.HealthTracker
+import io.github.vitorhpsousa.dpfsentinel.core.IdleBlockageWatch
+import io.github.vitorhpsousa.dpfsentinel.core.GradeTracker
 import io.github.vitorhpsousa.dpfsentinel.core.Messages
+import io.github.vitorhpsousa.dpfsentinel.core.PhoneColumns
 import io.github.vitorhpsousa.dpfsentinel.core.ObdPoller
 import io.github.vitorhpsousa.dpfsentinel.core.RegenEvent
 import io.github.vitorhpsousa.dpfsentinel.core.RegenWatch
@@ -37,6 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 // the regen watch, health tracker, notifications, Telegram and LiveState (phone + car screens).
 class LoggerService : Service() {
     @Volatile private var running = false
+    @Volatile private var stopReason = ""
     private var worker: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var prefs: Prefs
@@ -51,9 +55,18 @@ class LoggerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
+        // GPS in the background needs the location type too; Android refuses it when the location
+        // permission is missing or the start came from the background, so fall back to BLE only.
+        val ble = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
+        val withGps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ble or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
         try {
-            ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification("Starting…"), type)
+            try {
+                if (!PhoneSensors(this).hasLocationPermission) throw SecurityException("no location permission")
+                ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification("Starting…"), withGps)
+            } catch (e: Exception) {
+                Log.i(TAG, "logging without background GPS: ${e.message}")
+                ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification("Starting…"), ble)
+            }
         } catch (e: Exception) {
             // Missing Bluetooth permission or a background start Android refused.
             Log.w(TAG, "startForeground refused", e)
@@ -64,7 +77,8 @@ class LoggerService : Service() {
             running = true
             wakeLock = getSystemService(PowerManager::class.java)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DpfSentinel:logger").apply { acquire(12 * 60 * 60 * 1000L) }
-            worker = Thread({ loop() }, "obd-logger").also { it.start() }
+            stopReason = ""
+            worker = Thread({ runWorker() }, "obd-logger").also { it.start() }
         }
         return START_STICKY
     }
@@ -75,13 +89,46 @@ class LoggerService : Service() {
         worker?.join(3000)
         worker = null
         wakeLock?.let { if (it.isHeld) it.release() }
-        LiveState.update { it.copy(running = false, connected = false, stale = true, status = "Not logging") }
+        val why = stopReason.ifEmpty { "Not logging" }
+        LiveState.update { it.copy(running = false, connected = false, stale = true, status = why) }
         super.onDestroy()
     }
 
-    private fun loop() {
+    // Runs loop(), restarting it after a crash (a few times per 10 min at most), and stops the
+    // service when the loop gives up by itself (no car for a while), so the screens and the
+    // notification never claim "logging" while nothing is.
+    private fun runWorker() {
+        val me = Thread.currentThread()
+        // One logging thread per process: after a quick Stop + Start the previous worker may still
+        // be closing the adapter, so wait for it rather than share the BLE link.
+        activeWorker.getAndSet(me)?.takeIf { it !== me && it.isAlive }?.let { old ->
+            try { old.join(15_000) } catch (e: InterruptedException) { return }
+        }
+        val crashes = ArrayDeque<Long>()
+        while (running) {
+            val crashed = loop()
+            if (!running || !crashed) break
+            val t = SystemClock.elapsedRealtime()
+            crashes.addLast(t)
+            while (crashes.isNotEmpty() && t - crashes.first() > CRASH_WINDOW_MS) crashes.removeFirst()
+            if (crashes.size > MAX_CRASHES) {
+                stopReason = "Stopped after repeated errors: tap Start to try again"
+                alert("DPF Sentinel stopped", stopReason, NOTIF_HEALTH - 1)
+                break
+            }
+            try { Thread.sleep(5000) } catch (e: InterruptedException) { break }
+        }
+        activeWorker.compareAndSet(me, null)
+        if (running) {   // ended by itself rather than by Stop
+            running = false
+            stopSelf()
+        }
+    }
+
+    /** One logging session. Returns true if it ended on an unexpected error. */
+    private fun loop(): Boolean {
         val elm = BleElm(this)
-        val session = SessionFiles(this, prefs.nextSessionNumber())
+        val session = SessionFiles(this, prefs.nextSessionNumber(SessionFiles.highestNumber(this)))
         val t0 = SystemClock.elapsedRealtime()
         fun ms() = SystemClock.elapsedRealtime() - t0
         fun unix() = System.currentTimeMillis() / 1000.0
@@ -90,7 +137,12 @@ class LoggerService : Service() {
         val watch = RegenWatch(units = { prefs.units })
         val health = HealthTracker(HealthState.decode(prefs.health))
         val zone = SootZone()
+        val idleWatch = IdleBlockageWatch()
         val history = ArrayDeque<HistoryPoint>()
+        val sensors = PhoneSensors(this).also { it.start() }
+        val grade = GradeTracker()
+        var gps = PhoneSensors.Sample()
+        var extra = PhoneColumns.empty()
         var blankRows = 0
         var deadRawSkip = 0L
         var lastRow = 0L
@@ -99,10 +151,15 @@ class LoggerService : Service() {
         var lastNotif = 0L
         var connectFails = 0
         var lastEvent = ""
+        var lastAlert = ""
+        var lastCarMs = 0L   // last row with any decoded PID; the session starts the clock
+        var crashed = false
         var latest: Row? = null
         var status = "Looking for the OBD adapter…"
+        val power = getSystemService(PowerManager::class.java)
 
         fun publish(row: Row?) {
+            if (!running) return   // a stopping worker must not flip the screens back to "logging"
             val h = health.state
             val now = unix()
             LiveState.set(
@@ -113,7 +170,8 @@ class LoggerService : Service() {
                     adapterName = elm.name,
                     row = row,
                     stale = !elm.connected() || row == null || !row.anyPid(),
-                    regenActive = watch.active || (row?.regenActive ?: false),
+                    regenActive = (watch.active && !watch.paused) || (row?.regenActive ?: false),
+                    regenPaused = watch.paused && !(row?.regenActive ?: false),
                     regenStartedAtMs = if (watch.active) t0 + watch.startedAtMs else 0,
                     estimate = Messages.estimate(h, prefs.units),
                     estMiles = h.estMilesToRegen,
@@ -136,7 +194,13 @@ class LoggerService : Service() {
                     session = session.number,
                     rows = session.rows,
                     lastEvent = lastEvent,
-                    idleBlockage = row?.idleBlockageFlagged() ?: false,
+                    lastAlert = lastAlert,
+                    idleBlockage = row != null && idleWatch.flagged,
+                    writeError = session.writeError,
+                    gpsFix = !gps.lat.isNaN(),
+                    gpsSpeedKmh = gps.speedKmh,
+                    altitudeM = grade.altitudeM,
+                    gradePct = grade.gradePct,
                 ),
             )
         }
@@ -144,15 +208,18 @@ class LoggerService : Service() {
         fun connectAdapter(): Boolean {
             if (!elm.bluetoothOn) { status = "Bluetooth is off"; return false }
             // A saved adapter is reconnected by address; every third failure scans instead, so a
-            // replaced adapter is found without a trip to the settings.
+            // replaced adapter is found without a trip to the settings. Android pauses unfiltered
+            // scans while the screen is off, so that rescan only runs with the screen on.
+            val screenOn = power?.isInteractive ?: true
             val saved = prefs.adapterAddress
-            val useSaved = saved.isNotEmpty() && connectFails % 3 != 2
+            val useSaved = saved.isNotEmpty() && (connectFails % 3 != 2 || !screenOn)
             status = if (useSaved) "Connecting to ${prefs.adapterName.ifEmpty { saved }}…" else "Scanning for the OBD adapter…"
             publish(latest)
             val dev = elm.find(if (useSaved) saved else "")
             if (dev == null) {
                 connectFails++
-                status = "No adapter found: plug it in, ignition on, and close other OBD apps"
+                status = if (saved.isEmpty() && !screenOn) "Turn the phone screen on once so it can find the OBD adapter"
+                else "No adapter found: plug it in, ignition on, and close other OBD apps"
                 return false
             }
             if (!elm.connect(dev) || !poller.initAdapter(ms())) {
@@ -172,12 +239,19 @@ class LoggerService : Service() {
             publish(null)
             while (running) {
                 var now = ms()
+                // Parked, or walked off with the phone: give up rather than retry all night.
+                // Android Auto's auto-start brings it back next drive.
+                if (now - lastCarMs >= IDLE_STOP_MS) {
+                    stopReason = "Stopped: no data from the car for ${IDLE_STOP_MS / 60_000} min"
+                    break
+                }
                 if (!elm.connected()) {
                     if (now - lastReconnect >= RECONNECT_MS) {
-                        // A blank row marks the gap in the CSV, as the firmware does.
-                        session.writeRow(now, unix(), Row().values)
+                        // A blank row marks the gap in the CSV, once per disconnection.
+                        if (latest != null) session.writeRow(now, unix(), Row().values)
                         latest = null
                         connectAdapter()
+                        if (!running) break
                         lastReconnect = ms()
                         publish(latest)
                     }
@@ -196,15 +270,27 @@ class LoggerService : Service() {
                 val row = poller.assembleRow(now)
                 latest = row
                 val wall = unix()
-                session.writeRow(now, wall, row.values)
+                gps = sensors.sample()
+                // OBD speed for distance (steadier); GPS speed while the ECU isn't answering.
+                grade.update(now, if (row.speed.isNaN()) gps.speedKmh else row.speed,
+                    GradeTracker.pressureAltitudeM(gps.hpa), gps.altM, gps.vAccM)
+                val keepPos = prefs.logPosition
+                extra = doubleArrayOf(
+                    if (keepPos) gps.lat else Double.NaN, if (keepPos) gps.lon else Double.NaN,
+                    gps.speedKmh, gps.altM, gps.vAccM, gps.hpa, grade.altitudeM, grade.gradePct,
+                )
+                session.writeRow(now, wall, row.values, extra)
                 session.flushRaw()
 
-                val ev = watch.update(now, wall, row["dpf_regen_active"], row.egt, row.soot, row.sinceRegen, row.diffPressure)
+                val ev = watch.update(now, wall, row["dpf_regen_active"], row.egt, row.soot, row.sinceRegen, row.diffPressure,
+                    if (row.speed.isNaN()) gps.speedKmh else row.speed)
+                idleWatch.update(now, row.rpm, row.speed, row.diffPressure, row.coolant, watch.active || row.regenActive)
                 if (ev.type != RegenEvent.Type.NONE) {
                     lastEvent = ev.text
                     // Still-running pings update the screens only; start/finish/interrupted alert.
                     if (ev.type != RegenEvent.Type.TICK) {
-                        alert(ev.text.substringBefore('\n'), ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END)
+                        lastAlert = ev.text
+                        alert(ev.text.substringBefore('\n'), ev.text, if (ev.type == RegenEvent.Type.START || ev.type == RegenEvent.Type.RESUMED) NOTIF_REGEN_START else NOTIF_REGEN_END)
                         telegram.event(ev.text)
                     }
                 }
@@ -223,6 +309,7 @@ class LoggerService : Service() {
                     alert(if (z == 2) "Soot high" else "Soot rising", text, NOTIF_SOOT)
                 }
 
+                if (row.anyPid()) lastCarMs = now
                 blankRows = if (row.anyPid()) 0 else blankRows + 1
                 status = when {
                     row.anyPid() -> "Connected to ${elm.name}"
@@ -259,11 +346,14 @@ class LoggerService : Service() {
             // stopping
         } catch (e: Exception) {
             Log.e(TAG, "logger loop crashed", e)
+            crashed = true
         } finally {
             elm.close()
+            sensors.stop()
             session.close()
             if (health.dirty) prefs.health = health.state.encode()
         }
+        return crashed
     }
 
     private fun openApp(): PendingIntent = PendingIntent.getActivity(
@@ -284,7 +374,7 @@ class LoggerService : Service() {
     @SuppressLint("MissingPermission")
     private fun updateLiveNotification(row: Row, estimate: String) {
         val text = if (row.soot.isNaN()) LiveState.state.value.status
-        else "Soot ${"%.1f".format(row.soot)} g · next regen $estimate" + if (LiveState.state.value.regenActive) " · REGEN RUNNING" else ""
+        else "Soot ${"%.1f".format(row.soot)} g · next regen $estimate" + if (LiveState.state.value.regenActive) " · REGEN RUNNING" else if (LiveState.state.value.regenPaused) " · regen paused" else ""
         NotificationManagerCompat.from(this).notify(NOTIF_LIVE, liveNotification(text))
     }
 
@@ -323,6 +413,12 @@ class LoggerService : Service() {
         private const val HISTORY_MS = 120_000L
         private const val BLANK_ROWS_REINIT = 10
         private const val BLANK_ROWS_RECONNECT = 30
+        private const val IDLE_STOP_MS = 10 * 60_000L
+        private const val CRASH_WINDOW_MS = 10 * 60_000L
+        private const val MAX_CRASHES = 3
+
+        /** The one live logging thread in this process (see runWorker). */
+        private val activeWorker = java.util.concurrent.atomic.AtomicReference<Thread?>(null)
 
         /** Set by the "Oil changed" button; applied by the logger on its next row. */
         val oilChangeRequested = AtomicBoolean(false)

@@ -1,6 +1,14 @@
 package io.github.vitorhpsousa.dpfsentinel.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
+import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +42,7 @@ import io.github.vitorhpsousa.dpfsentinel.HistoryPoint
 import io.github.vitorhpsousa.dpfsentinel.LoggerService
 import io.github.vitorhpsousa.dpfsentinel.Prefs
 import io.github.vitorhpsousa.dpfsentinel.Snapshot
+import io.github.vitorhpsousa.dpfsentinel.core.IdleBlockageWatch
 import java.util.Locale
 
 val Green = Color(0xFF43A047)
@@ -65,7 +74,12 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
             val mins = if (s.regenStartedAtMs > 0) (SystemClock.elapsedRealtime() - s.regenStartedAtMs) / 60000 else 0
             Banner("REGENERATING · $mins min · EGT ${u.temp(r?.egt ?: nan)}", "Keep driving steadily so it can finish.", Amber)
         }
-        if (s.idleBlockage) Banner("DPF pressure high at idle", "A possible blockage sign (threshold unverified).", Red)
+        if (s.regenPaused) Banner("Regen paused", "The car holds the regen while it stands still. It should carry on once you drive off; a steady drive helps it finish.", Amber)
+        if (s.idleBlockage) Banner("DPF pressure high at idle", "Over ${IdleBlockageWatch.THRESHOLD_HPA.toInt()} hPa for a minute at warm idle, with no regen in the last 10 min. A possible blockage sign (threshold still being checked).", Red)
+        if (s.running && s.writeError.isNotEmpty()) {
+            Banner("Can't write the log file", "${s.writeError}. Is the phone's storage full? Live values still update.", Red)
+        }
+        PermissionBanners()
 
         // Soot: the number this whole project is about.
         val soot = r?.soot ?: Double.NaN
@@ -108,6 +122,9 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
             "Intercooler" to u.temp(r?.intercooler ?: nan),
             "MAF" to fmt(r?.maf ?: Double.NaN, 1) + " g/s",
             "Load" to fmt(r?.get("engine_load_pct") ?: Double.NaN, 0) + " %",
+            "Grade" to (if (s.gradePct.isNaN()) "--" else String.format(Locale.getDefault(), "%+.1f %%", s.gradePct)),
+            "Altitude" to fmt(s.altitudeM, 0) + " m",
+            "GPS speed" to (if (s.gpsFix) u.speed(s.gpsSpeedKmh) else "no fix"),
         )
         tiles.chunked(3).forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -142,6 +159,38 @@ private fun Banner(title: String, text: String, color: Color) {
     Column(Modifier.fillMaxWidth().background(color.copy(alpha = 0.2f), RoundedCornerShape(12.dp)).padding(12.dp)) {
         Text(title, color = color, fontWeight = FontWeight.Bold)
         Text(text)
+    }
+}
+
+// Denied permissions otherwise fail silently: alerts (phone and Android Auto) are dropped, or the
+// logger can't reach the adapter. Once denied twice Android stops asking, so link to Settings.
+@Composable
+private fun PermissionBanners() {
+    val ctx = LocalContext.current
+    val notificationsOff = !NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    val bluetoothOff = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+    if (bluetoothOff) {
+        SettingsBanner("Bluetooth permission is off", "DPF Sentinel can't talk to the OBD adapter without it.") {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))
+        }
+    }
+    if (notificationsOff) {
+        SettingsBanner("Notifications are off", "Regen, soot and health alerts won't show on the phone or in Android Auto.") {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+        }
+    }
+}
+
+@Composable
+private fun SettingsBanner(title: String, text: String, intent: () -> Intent) {
+    val ctx = LocalContext.current
+    Column(Modifier.fillMaxWidth().background(Color(0xFF15181C), RoundedCornerShape(8.dp)).padding(12.dp)) {
+        Text(title, color = Amber, fontWeight = FontWeight.Bold)
+        Text(text)
+        OutlinedButton(onClick = {
+            runCatching { ctx.startActivity(intent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }) { Text("Open settings") }
     }
 }
 
