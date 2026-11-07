@@ -2,7 +2,7 @@
 #include <math.h>
 
 // Kept here rather than in config.h so the native tests build without the board
-// config; the values match android/core/.../IdleBlockage.kt.
+// config; the values match DPFSentinel-Android core/.../IdleBlockage.kt.
 static const float THRESHOLD_HPA = 35.0f;        // held for HOLD_MS at warm idle
 static const uint32_t HOLD_MS = 60000;
 static const float WARM_C = 70.0f;

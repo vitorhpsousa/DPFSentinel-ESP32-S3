@@ -4,7 +4,7 @@
 
 // Watches the decoded DPF regen flag and produces a one-line-per-fact message
 // when a regeneration starts or ends. Pure logic (no Arduino types) so it is
-// unit-tested natively. Twin of android/core/.../RegenWatch.kt.
+// unit-tested natively. Twin of DPFSentinel-Android core/.../RegenWatch.kt.
 //
 // The ECU drops the regen flag while the car stands at idle (a drive-through,
 // traffic) or when the engine is switched off, and picks the same regen up again

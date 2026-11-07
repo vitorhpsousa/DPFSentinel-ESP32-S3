@@ -1,5 +1,5 @@
 // Regens that stop at a standstill, and the idle-pressure warning. Same cases as
-// android/core/src/test/.../StandstillTest.kt, so the board and the app agree.
+// DPFSentinel-Android core/src/test/.../StandstillTest.kt, so the board and the app agree.
 #include <unity.h>
 #include <math.h>
 #include <vector>

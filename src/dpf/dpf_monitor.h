@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 // "DPF pressure high at idle", the possible-blockage sign. Twin of
-// android/core/.../IdleBlockage.kt.
+// DPFSentinel-Android core/.../IdleBlockage.kt.
 //
 // Idle DPF pressure rises with the soot load: a normal 10-18 g filter idles at
 // about 22 hPa, and during a regen idle pressure is 20+ hPa most of the time, so

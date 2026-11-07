@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-07T10:11:04.190Z" hostname="vitors-macbook-pro.taile467d.ts.net" time="0.043">
+  <properties/>
+  <testcase name="negativeSteeringAngle()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.016"/>
+  <testcase name="batteryVoltage()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.0"/>
+  <testcase name="shortAndForeignFramesRejected()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.007"/>
+  <testcase name="csvRowFormat()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.003"/>
+  <testcase name="mode21Multiframe()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.002"/>
+  <testcase name="csvHeaderMatchesFirmwareLogs()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.013"/>
+  <testcase name="diffPressure()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.0"/>
+  <testcase name="sootAndIntercooler()" classname="io.github.vitorhpsousa.dpfsentinel.core.DecodeTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

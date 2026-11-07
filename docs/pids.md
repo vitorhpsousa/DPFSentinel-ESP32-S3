@@ -71,7 +71,7 @@ level), 0123 (rail pressure) are unsupported, so boost cannot be computed. "dpf_
 temp 013E.
 
 Hot-idle pressure warning: 35 hPa held for 60 s at warm idle (coolant 70 C+), never during a regen or in the
-10 min after one (`src/dpf/dpf_monitor.cpp`, `android/core/.../IdleBlockage.kt`). Idle pressure tracks soot load:
+10 min after one (`src/dpf/dpf_monitor.cpp`, `core/.../IdleBlockage.kt` in [DPFSentinel-Android](https://github.com/vitorhpsousa/DPFSentinel-Android)). Idle pressure tracks soot load:
 a normal 10-18 g filter idles at about 22 hPa, so the old 20 hPa single-row test fired constantly. Still
 unverified against a real blockage, as are the soot colour thresholds (amber 14 g, red 17 g). Other cars: not supported yet; see [other-cars.md](other-cars.md).
 Background: [ix35-known-issues.md](ix35-known-issues.md).
