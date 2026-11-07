@@ -62,9 +62,18 @@ class Prefs(context: Context) {
         get() = p.getBoolean("autoCar", true)
         set(v) = p.edit().putBoolean("autoCar", v).apply()
 
-    fun nextSessionNumber(): Int {
-        val n = p.getInt("session", 0) + 1
-        p.edit().putInt("session", n).apply()
+    /** Write latitude/longitude to the logs (speed, altitude and grade are logged regardless). */
+    var logPosition: Boolean
+        get() = p.getBoolean("logPos", true)
+        set(v) = p.edit().putBoolean("logPos", v).apply()
+
+    /**
+     * Never reuses a number: also above any log file already on the phone, and saved with commit()
+     * so a kill right after starting can't lose the increment (apply() writes later).
+     */
+    fun nextSessionNumber(highestOnDisk: Int = 0): Int {
+        val n = maxOf(p.getInt("session", 0), highestOnDisk) + 1
+        p.edit().putInt("session", n).commit()
         return n
     }
 

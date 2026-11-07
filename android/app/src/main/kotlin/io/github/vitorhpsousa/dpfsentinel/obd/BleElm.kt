@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 class BleElm(private val context: Context) : ElmTransport {
     private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
 
-    private var gatt: BluetoothGatt? = null
+    @Volatile private var gatt: BluetoothGatt? = null
     private var tx: BluetoothGattCharacteristic? = null
     private var rx: BluetoothGattCharacteristic? = null
     private var chunk = 20   // ATT payload per write; raised after the MTU exchange
@@ -34,6 +34,8 @@ class BleElm(private val context: Context) : ElmTransport {
     private val rxBuf = StringBuilder()
     private val rxLock = Object()
     @Volatile private var linkUp = false
+    // The last command timed out before its '>' prompt; that prompt may still arrive.
+    private var promptOwed = false
 
     // GATT callback results handed from the binder thread to the logger thread.
     private val connQ = LinkedBlockingQueue<Boolean>()
@@ -47,27 +49,38 @@ class BleElm(private val context: Context) : ElmTransport {
 
     fun connected(): Boolean = linkUp && tx != null && rx != null
 
+    // A late callback from an earlier connection must not touch the current one. While gatt is
+    // still null (connectGatt hasn't returned yet) nothing else can be running, so accept it.
+    private fun stale(g: BluetoothGatt) = gatt.let { it != null && it !== g }
+
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+            if (stale(g)) return
             val up = status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED
-            if (!up) linkUp = false
+            if (!up) {
+                linkUp = false
+                synchronized(rxLock) { rxLock.notifyAll() }   // a send() waiting for '>' gives up now
+            }
             connQ.offer(up)
         }
 
-        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) { opQ.offer(status) }
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) { if (!stale(g)) opQ.offer(status) }
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            if (stale(g)) return
             if (status == BluetoothGatt.GATT_SUCCESS) chunk = (mtu - 3).coerceIn(20, 244)
             opQ.offer(status)
         }
-        override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) { opQ.offer(status) }
-        override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) { opQ.offer(status) }
+        override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) { if (!stale(g)) opQ.offer(status) }
+        override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) { if (!stale(g)) opQ.offer(status) }
 
-        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) = append(value)
+        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) {
+            if (!stale(g)) append(value)
+        }
 
         @Deprecated("Used before Android 13")
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) c.value?.let { append(it) }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !stale(g)) c.value?.let { append(it) }
         }
     }
 
@@ -195,7 +208,20 @@ class BleElm(private val context: Context) : ElmTransport {
 
     override fun send(cmd: String, timeoutMs: Long): String {
         if (!connected()) return ""
-        synchronized(rxLock) { rxBuf.setLength(0) }
+        synchronized(rxLock) {
+            // A slow reply to the previous command would otherwise be read as this command's answer
+            // (and shift every request by one): wait briefly for its late '>' before clearing.
+            if (promptOwed) {
+                val until = System.currentTimeMillis() + LATE_PROMPT_MS
+                while (rxBuf.indexOf(">") < 0 && linkUp) {
+                    val left = until - System.currentTimeMillis()
+                    if (left <= 0) break
+                    rxLock.wait(left)
+                }
+                promptOwed = false
+            }
+            rxBuf.setLength(0)
+        }
         if (!write((cmd + "\r").toByteArray(Charsets.ISO_8859_1))) return ""
         val deadline = System.currentTimeMillis() + timeoutMs
         synchronized(rxLock) {
@@ -203,7 +229,10 @@ class BleElm(private val context: Context) : ElmTransport {
                 val gt = rxBuf.indexOf(">")
                 if (gt >= 0) return rxBuf.substring(0, gt).trim()
                 val left = deadline - System.currentTimeMillis()
-                if (left <= 0 || !linkUp) return rxBuf.toString().trim()
+                if (left <= 0 || !linkUp) {
+                    promptOwed = linkUp
+                    return rxBuf.toString().trim()
+                }
                 rxLock.wait(left)
             }
         }
@@ -216,10 +245,12 @@ class BleElm(private val context: Context) : ElmTransport {
         tx = null
         rx = null
         chunk = 20
+        promptOwed = false
     }
 
     companion object {
         private const val TAG = "BleElm"
+        private const val LATE_PROMPT_MS = 1500L
         private val NUS: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         private const val BASE_UUID_SUFFIX = "-0000-1000-8000-00805f9b34fb"

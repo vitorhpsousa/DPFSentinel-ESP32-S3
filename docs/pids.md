@@ -70,6 +70,8 @@ Dead ends (do not retry): mode 22 does not exist on this ECU (`7F 22 11`); 010B 
 level), 0123 (rail pressure) are unsupported, so boost cannot be computed. "dpf_zone_temp_c" is really catalyst
 temp 013E.
 
-Unverified: the hot-idle pressure threshold (`DPF_IDLE_PRESSURE_THRESHOLD_HPA`) and the soot colour thresholds
-(amber 14 g, red 17 g). Other cars: not supported yet; see [other-cars.md](other-cars.md).
+Hot-idle pressure warning: 35 hPa held for 60 s at warm idle (coolant 70 C+), never during a regen or in the
+10 min after one (`src/dpf/dpf_monitor.cpp`, `android/core/.../IdleBlockage.kt`). Idle pressure tracks soot load:
+a normal 10-18 g filter idles at about 22 hPa, so the old 20 hPa single-row test fired constantly. Still
+unverified against a real blockage, as are the soot colour thresholds (amber 14 g, red 17 g). Other cars: not supported yet; see [other-cars.md](other-cars.md).
 Background: [ix35-known-issues.md](ix35-known-issues.md).

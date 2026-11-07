@@ -73,11 +73,19 @@ class LogicTest {
         assertEquals(RegenEvent.Type.END, step(0.0).type)
     }
 
-    @Test fun regenInterruptedAfterGap() {
+    @Test fun regenGapPausesThenInterruptsIfItNeverResumes() {
         val w = RegenWatch(ZoneOffset.UTC)
         repeat(3) { w.update(it * 1000L, nan, 1.0, 500.0, 18.0, 250.0, nan) }
-        val ev = w.update(200_000, nan, 1.0, 500.0, 15.0, 251.0, nan)
+        // Engine off / link lost for over 2 min: paused, not over.
+        assertEquals(RegenEvent.Type.PAUSED, w.update(200_000, nan, 0.0, 300.0, 15.0, 251.0, nan, 0.0).type)
+        assertTrue(w.paused)
+        // Drives off and the flag never comes back: after 3 min of driving it is called off.
+        var t = 201_000L
+        var ev = RegenEvent.NONE
+        while (ev.type == RegenEvent.Type.NONE && t < 600_000) { ev = w.update(t, nan, 0.0, 300.0, 15.0, 252.0, nan, 50.0); t += 1000 }
         assertEquals(RegenEvent.Type.INTERRUPTED, ev.type)
+        assertTrue(t in 380_000L..385_000L)
+        assertTrue(!w.active)
     }
 
     private fun row(soot: Double, dist: Double, odo: Double = 50_000.0 + dist, coolant: Double = 90.0): Row = Row().also {

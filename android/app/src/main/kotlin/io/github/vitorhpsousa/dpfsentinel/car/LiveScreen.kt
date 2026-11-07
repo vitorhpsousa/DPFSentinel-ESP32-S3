@@ -35,17 +35,18 @@ import java.util.Locale
 class LiveScreen(carContext: CarContext) : Screen(carContext) {
     private var snap: Snapshot = LiveState.state.value
     private var lastKey = ""
-    private var lastEvent = snap.lastEvent
+    private var lastAlert = snap.lastAlert
 
     init {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     val s = LiveState.state.value
-                    if (s.lastEvent.isNotEmpty() && s.lastEvent != lastEvent) {
-                        CarToast.makeText(carContext, s.lastEvent.substringBefore('\n'), CarToast.LENGTH_LONG).show()
+                    // Start/finish/interrupted only; the 30 s "still running" ticks just update the pane.
+                    if (s.lastAlert.isNotEmpty() && s.lastAlert != lastAlert) {
+                        CarToast.makeText(carContext, s.lastAlert.substringBefore('\n'), CarToast.LENGTH_LONG).show()
                     }
-                    lastEvent = s.lastEvent
+                    lastAlert = s.lastAlert
                     val key = rows(s).joinToString("|") { it.first + "/" + it.second } + s.running + s.sootZone
                     if (key != lastKey) {
                         lastKey = key
@@ -86,7 +87,9 @@ class LiveScreen(carContext: CarContext) : Screen(carContext) {
             if (soot.isNaN()) "Soot --" else "Soot ${n(soot, 1)} g · $zoneWord",
             if (s.triggerG.isNaN()) "" else "This car regenerates at about ${n(s.triggerG, 1)} g",
         )
-        if (s.regenActive) {
+        if (s.regenPaused) {
+            out += Pair("Regen paused while stopped", "It should carry on once you drive off")
+        } else if (s.regenActive) {
             val mins = if (s.regenStartedAtMs > 0) (SystemClock.elapsedRealtime() - s.regenStartedAtMs) / 60000 else 0
             out += Pair("REGENERATING · $mins min", "Keep driving steadily so it can finish")
         } else {

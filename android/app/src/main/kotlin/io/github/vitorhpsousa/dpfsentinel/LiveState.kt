@@ -15,6 +15,8 @@ data class Snapshot(
     val row: Row? = null,
     val stale: Boolean = true,
     val regenActive: Boolean = false,
+    /** A regen the ECU is holding while the car stands still; it usually resumes on driving off. */
+    val regenPaused: Boolean = false,
     val regenStartedAtMs: Long = 0,
     val estimate: String = "--",
     val estMiles: Double = Double.NaN,
@@ -28,7 +30,14 @@ data class Snapshot(
     val session: Int = 0,
     val rows: Long = 0,
     val lastEvent: String = "",
+    /** Regen start/finish/interrupted only (not the 30 s "still running" ticks): what the car pops up. */
+    val lastAlert: String = "",
     val idleBlockage: Boolean = false,
+    val writeError: String = "",
+    val gpsFix: Boolean = false,
+    val gpsSpeedKmh: Double = Double.NaN,
+    val altitudeM: Double = Double.NaN,
+    val gradePct: Double = Double.NaN,
 )
 
 data class HistoryPoint(val ms: Long, val soot: Double, val diffPressure: Double, val egt: Double, val rpm: Double)

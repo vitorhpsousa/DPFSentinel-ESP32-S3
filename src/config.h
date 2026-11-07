@@ -114,9 +114,8 @@
 #define BLANK_ROWS_REINIT 10       // all-blank rows before re-initialising the adapter
 #define BLANK_ROWS_RECONNECT 30    // ... before a full BLE reconnect
 
-// DPF idle-blockage heuristic (differential pressure at idle) — threshold unverified, see docs.
-#define DPF_IDLE_PRESSURE_THRESHOLD_HPA 20.0f
-#define DPF_IDLE_RPM_CEILING            1100
+// DPF idle-blockage heuristic: thresholds live in src/dpf/dpf_monitor.cpp (35 hPa held 60 s at warm idle,
+// quiet during and 10 min after a regen), shared with the Android app's IdleBlockage.kt.
 
 // Optional status LEDs (-1 = none). Free GPIOs on the Freenove board: 1 and 2.
 #define LED_REGEN_PIN -1
